@@ -3,7 +3,7 @@ import logging
 
 import warnings
 
-from utils.setup_folder import setup_folder
+from backend.extract import crawl_markets, crawl_companies
 
 warnings.filterwarnings("ignore")
 
@@ -17,11 +17,12 @@ def main() -> None:
         level=logging.INFO,
         format="[%(levelname)s] %(message)s",
         filemode="a",
-        filename=LOGS_DIR / "config.log",
+        filename=LOGS_DIR / "Backend.log",
     )
-    logging.info("Config data folders")
-    setup_folder()
-    logging.info("Config data folders is complete")
+    logging.info("Extract data")
+    crawl_markets()
+    crawl_companies()
+    logging.info("Extract data finished")
 
 
 if __name__ == "__main__":

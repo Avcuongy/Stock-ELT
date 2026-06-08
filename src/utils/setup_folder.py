@@ -23,14 +23,7 @@ DATA_SUBFOLDERS = [
 
 
 def _ensure_data_folders() -> None:
-    """Create the data/ directory structure used by the project.
-
-    This script pre-creates the folders currently present under the top-level
-    ``data/`` directory so that pipelines can assume they exist.
-    """
-
     DATA_ROOT.mkdir(exist_ok=True)
-
     for relative in DATA_SUBFOLDERS:
         folder = DATA_ROOT / relative
         folder.mkdir(parents=True, exist_ok=True)

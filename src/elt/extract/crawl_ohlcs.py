@@ -13,12 +13,12 @@ INCLUDE_OTC = "true"
 BASE_URL = "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks"
 
 
-def get_target_date(delta_days: int = 1) -> datetime.date:
+def _get_target_date(delta_days: int = 1) -> datetime.date:
     """Return the target date, default is yesterday."""
     return datetime.date.today() - datetime.timedelta(days=delta_days)
 
 
-def build_url(trading_date: datetime.date) -> str:
+def _build_url(trading_date: datetime.date) -> str:
     """Build Polygon OHLCs API URL for a given trading date."""
     date_str = trading_date.strftime("%Y-%m-%d")
     return (
@@ -27,7 +27,7 @@ def build_url(trading_date: datetime.date) -> str:
     )
 
 
-def get_output_path(trading_date: datetime.date) -> Path:
+def _get_output_path(trading_date: datetime.date) -> Path:
     """Return output path under data/raw/ohlcs for the given date."""
     date_str = trading_date.strftime("%Y_%m_%d")
     project_root = Path(__file__).resolve().parents[3]
@@ -38,19 +38,21 @@ def get_output_path(trading_date: datetime.date) -> Path:
 
 def crawl_ohlcs(trading_date: Optional[datetime.date] = None) -> Path:
     """Crawl OHLCs data for the given date (default: yesterday) and save to JSON.
-
-    Returns the path to the saved file.
+    Args:
+        trading_date: The date for which to crawl OHLCs data. If None, defaults to yesterday.
+    Returns:
+        Path: path to the saved file.
     """
     if trading_date is None:
-        trading_date = get_target_date(1)
+        trading_date = _get_target_date(1)
 
-    url = build_url(trading_date)
+    url = _build_url(trading_date)
     response = requests.get(url, timeout=60)
     response.raise_for_status()
     payload = response.json()
     results = payload.get("results", [])
 
-    output_path = get_output_path(trading_date)
+    output_path = _get_output_path(trading_date)
     with output_path.open("w", encoding="utf-8") as outfile:
         json.dump(results, outfile, indent=4)
 
