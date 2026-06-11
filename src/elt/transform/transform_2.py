@@ -18,6 +18,7 @@ from pyspark.sql.functions import (
     when,
     lit,
 )
+from utils.logger import get_logger
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -31,15 +32,7 @@ HDFS_BASE_DIR = "/data_lake"
 HDFS_DB_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/db"
 HDFS_OHLCS_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/ohlcs"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "elt")
 
 
 def _get_spark_session():

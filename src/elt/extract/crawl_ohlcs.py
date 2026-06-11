@@ -5,14 +5,14 @@ import pytz
 import logging
 from pathlib import Path
 from massive import RESTClient
+from utils.logger import get_logger
 from utils.config_env import MASSIVE_API_KEY
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
-LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "elt")
 
 
 def _get_target_date(delta_days: int = 1) -> datetime.date:

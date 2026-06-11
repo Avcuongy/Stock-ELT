@@ -6,6 +6,7 @@ import traceback
 import logging
 import pandas as pd
 from sqlalchemy import create_engine
+from utils.logger import get_logger
 from utils.config_env import DATABASE_URL
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -22,15 +23,7 @@ TABLES = [
     "companies",
 ]
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "elt")
 
 
 def _get_db_connection():
@@ -92,7 +85,12 @@ def _export_to_parquet():
 
 
 def convert_db_to_parquet():
-    _export_to_parquet()
+    try:
+        _export_to_parquet()
+
+    except Exception as e:
+        logger.error(f"[Load] Error: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

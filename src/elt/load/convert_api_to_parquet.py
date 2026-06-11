@@ -6,23 +6,14 @@ import datetime
 import traceback
 import logging
 import pandas as pd
+from utils.logger import get_logger
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
 DATA_COMPLETE_DIR = DATA_DIR / "completed"
-LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "elt")
 
 
 def _get_latest_file_in_directory(directory, extension):
@@ -95,7 +86,7 @@ def _export_to_parquet():
     return output_file
 
 
-def convert_db_to_parquet():
+def convert_api_to_parquet():
     try:
         _export_to_parquet()
 
@@ -105,4 +96,4 @@ def convert_db_to_parquet():
 
 
 if __name__ == "__main__":
-    convert_db_to_parquet()
+    convert_api_to_parquet()
