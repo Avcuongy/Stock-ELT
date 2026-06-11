@@ -1,16 +1,42 @@
 from pathlib import Path
+import os
+import sys
+import logging
+import traceback
+import pandas as pd
 import duckdb
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
+import warnings
+
+warnings.filterwarnings("ignore")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-HDFS_URL = "hdfs://localhost:9000"
-HDFS_DB_DIR = f"{HDFS_URL}/data_lake/db"
+LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
+DATA_DIR = PROJECT_ROOT / "data"
 DUCKDB_PATH = PROJECT_ROOT / "data_warehouse.duckdb"
+HDFS_RPC_URL = "hdfs://localhost:9000"
+HDFS_BASE_DIR = "/data_lake"
+HDFS_DB_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/db"
+HDFS_OHLCS_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/ohlcs"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
 
 
 def _get_spark_session():
-    return SparkSession.builder.appName("elt_dim_pipeline").getOrCreate()
+    return (
+        SparkSession.builder.appName("elt_transform")
+        .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+        .getOrCreate()
+    )
 
 
 def _build_dim_company(spark: SparkSession):
@@ -39,8 +65,8 @@ def _build_dim_exchange(spark: SparkSession):
             col("exchange_name"),
             col("region_name"),
             col("region_market_type"),
-            col("region_local_open").cast("string"),
-            col("region_local_close").cast("string"),
+            col("region_local_open"),
+            col("region_local_close"),
         )
         .distinct()
     )
@@ -85,23 +111,43 @@ def transform_1(spark: SparkSession = None):
     pd_dim_exchange = df_dim_exchange.toPandas()
     pd_dim_industry = df_dim_industry.toPandas()
 
+    # fix exchange local open/close time format to HH:MM:SS
+    for c in ["region_local_open", "region_local_close"]:
+        pd_dim_exchange[c] = (
+            pd.to_timedelta(pd_dim_exchange[c])
+            .astype(str)
+            .str.extract(r"(\d{2}:\d{2}:\d{2})")[0]
+        )
+
+    logger.info("[Transform] Inserting tables into DuckDB with SCD is_current flag")
     with duckdb.connect(str(DUCKDB_PATH)) as conn:
         conn.execute("SET schema = 'DataWarehouse'")
 
         conn.execute("""
-            INSERT INTO DIM_COMPANY (company_ticker, company_name, company_cik, company_is_delisted, company_location)
-            SELECT company_ticker, company_name, company_cik, company_is_delisted, company_location FROM pd_dim_company
+            INSERT INTO DIM_COMPANY (company_ticker, company_name, company_cik, company_is_delisted, company_location, is_current)
+            SELECT company_ticker, company_name, company_cik, company_is_delisted, company_location, TRUE FROM pd_dim_company
         """)
 
         conn.execute("""
-            INSERT INTO DIM_EXCHANGE (exchange_name, region_name, region_market_type, region_local_open, region_local_close)
-            SELECT exchange_name, region_name, region_market_type, region_local_open, region_local_close FROM pd_dim_exchange
+            INSERT INTO DIM_EXCHANGE (exchange_name, region_name, region_market_type, region_local_open, region_local_close, is_current)
+            SELECT exchange_name, region_name, region_market_type, region_local_open, region_local_close, TRUE FROM pd_dim_exchange
         """)
 
         conn.execute("""
-            INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, company_category, sic_industry, sic_sector)
-            SELECT industry_sector, industry_name, company_category, sic_industry, sic_sector FROM pd_dim_industry
+            INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, company_category, sic_industry, sic_sector, is_current)
+            SELECT industry_sector, industry_name, company_category, sic_industry, sic_sector, TRUE FROM pd_dim_industry
         """)
+
+        company_count = conn.execute("SELECT COUNT(*) FROM DIM_COMPANY").fetchone()[0]
+        exchange_count = conn.execute("SELECT COUNT(*) FROM DIM_EXCHANGE").fetchone()[0]
+        industry_count = conn.execute("SELECT COUNT(*) FROM DIM_INDUSTRY").fetchone()[0]
+
+    logger.info(f"[Transform] DIM_COMPANY records : {company_count:,}")
+    logger.info(f"[Transform] DIM_EXCHANGE records: {exchange_count:,}")
+    logger.info(f"[Transform] DIM_INDUSTRY records: {industry_count:,}")
+    logger.info(
+        "[Transform] Successfully transformed dim_company, dim_exchange, dim_industry and loaded into DuckDB"
+    )
 
     if should_stop_spark:
         spark.stop()

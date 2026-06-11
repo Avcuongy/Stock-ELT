@@ -12,6 +12,16 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
 LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_target_date(delta_days: int = 1) -> datetime.date:
     ny_tz = pytz.timezone("America/New_York")
@@ -34,14 +44,6 @@ def _get_output_path(trading_date: datetime.date) -> Path:
 
 
 def crawl_ohlcs():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
     target_date = _get_target_date(delta_days=1)
     date_str = target_date.strftime("%Y-%m-%d")
 
@@ -56,13 +58,13 @@ def crawl_ohlcs():
         with output_path.open("w", encoding="utf-8") as outfile:
             json.dump(results, outfile, indent=4)
 
-        logging.info(
+        logger.info(
             f"[Extract] Successful crawling {len(results)} OHLCs to {output_path}"
         )
         return output_path
 
     except Exception as e:
-        logging.error(f"[Extract] Error: {e}")
+        logger.error(f"[Extract] Error: {e}")
         return None
 
 

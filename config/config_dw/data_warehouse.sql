@@ -9,7 +9,7 @@ CREATE SEQUENCE IF NOT EXISTS seq_industry_key START 1;
 
 CREATE SEQUENCE IF NOT EXISTS seq_exchange_key START 1;
 
--- DIM DATA
+-- DIM_DATE
 CREATE TABLE DIM_DATE (
     date_key INTEGER PRIMARY KEY,
     full_date TIMESTAMP,
@@ -30,7 +30,8 @@ CREATE TABLE DIM_COMPANY (
     company_name VARCHAR,
     company_cik VARCHAR,
     company_is_delisted BOOLEAN,
-    company_location VARCHAR
+    company_location VARCHAR,
+    is_current BOOLEAN DEFAULT TRUE
 );
 
 -- DIM_INDUSTRY
@@ -40,7 +41,8 @@ CREATE TABLE DIM_INDUSTRY (
     industry_name VARCHAR,
     company_category VARCHAR,
     sic_industry VARCHAR,
-    sic_sector VARCHAR
+    sic_sector VARCHAR,
+    is_current BOOLEAN DEFAULT TRUE
 );
 
 -- DIM_EXCHANGE
@@ -50,7 +52,8 @@ CREATE TABLE DIM_EXCHANGE (
     region_name VARCHAR,
     region_market_type VARCHAR,
     region_local_open TIME,
-    region_local_close TIME
+    region_local_close TIME,
+    is_current BOOLEAN DEFAULT TRUE
 );
 
 -- FACT_STOCK_DAILY

@@ -1,4 +1,8 @@
 from pathlib import Path
+import os
+import sys
+import logging
+import traceback
 import duckdb
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
@@ -14,15 +18,36 @@ from pyspark.sql.functions import (
     when,
     lit,
 )
+import warnings
+
+warnings.filterwarnings("ignore")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-HDFS_URL = "hdfs://localhost:9000"
-HDFS_OHLCS_DIR = f"{HDFS_URL}/data_lake/ohlcs"
+LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
+DATA_DIR = PROJECT_ROOT / "data"
 DUCKDB_PATH = PROJECT_ROOT / "data_warehouse.duckdb"
+HDFS_RPC_URL = "hdfs://localhost:9000"
+HDFS_BASE_DIR = "/data_lake"
+HDFS_DB_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/db"
+HDFS_OHLCS_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/ohlcs"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
 
 
 def _get_spark_session():
-    return SparkSession.builder.appName("elt_fact_pipeline").getOrCreate()
+    return (
+        SparkSession.builder.appName("elt_transform")
+        .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+        .getOrCreate()
+    )
 
 
 def _build_dim_date(raw_ohlcs):
@@ -57,7 +82,6 @@ def _build_fact_stock_daily(
     dim_exchange_db,
     dim_industry_db,
 ):
-
     fact_df = (
         raw_ohlcs.withColumn("full_date", to_date(col("timestamp")))
         .withColumn("date_key", date_format(col("full_date"), "yyyyMMdd").cast("int"))
@@ -126,57 +150,83 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
 
     file_pattern = f"ohlcs_{target_date}.parquet" if target_date else "ohlcs_*.parquet"
     raw_ohlcs = spark.read.parquet(f"{HDFS_OHLCS_DIR}/{file_pattern}")
-    raw_companies = spark.read.parquet(f"{HDFS_OHLCS_DIR}/companies_*.parquet")
-    raw_exchanges = spark.read.parquet(f"{HDFS_OHLCS_DIR}/exchanges_*.parquet")
-    raw_industries = spark.read.parquet(f"{HDFS_OHLCS_DIR}/industries_*.parquet")
+    raw_companies = spark.read.parquet(f"{HDFS_DB_DIR}/companies_*.parquet")
+    raw_exchanges = spark.read.parquet(f"{HDFS_DB_DIR}/exchanges_*.parquet")
+    raw_industries = spark.read.parquet(f"{HDFS_DB_DIR}/industries_*.parquet")
 
-    with duckdb.connect(str(DUCKDB_PATH)) as conn:
-        conn.execute("SET schema = 'DataWarehouse'")
-        dim_company_db = spark.createDataFrame(
-            conn.execute("SELECT company_key, company_ticker FROM DIM_COMPANY").df()
+    try:
+        with duckdb.connect(str(DUCKDB_PATH)) as conn:
+            conn.execute("SET schema = 'DataWarehouse'")
+
+            dim_company_db = spark.createDataFrame(
+                conn.execute(
+                    "SELECT company_key, company_ticker FROM DIM_COMPANY WHERE is_current = TRUE"
+                ).df()
+            )
+
+            dim_exchange_db = spark.createDataFrame(
+                conn.execute(
+                    "SELECT exchange_key, exchange_name FROM DIM_EXCHANGE WHERE is_current = TRUE"
+                ).df()
+            )
+
+            dim_industry_db = spark.createDataFrame(conn.execute("""
+                    SELECT 
+                        industry_key, 
+                        industry_name, 
+                        company_category 
+                    FROM DIM_INDUSTRY 
+                    WHERE is_current = TRUE
+                    """).df())
+
+        df_dim_date = _build_dim_date(raw_ohlcs)
+        df_fact = _build_fact_stock_daily(
+            raw_ohlcs,
+            raw_companies,
+            raw_exchanges,
+            raw_industries,
+            dim_company_db,
+            dim_exchange_db,
+            dim_industry_db,
         )
-        dim_exchange_db = spark.createDataFrame(
-            conn.execute("SELECT exchange_key, exchange_name FROM DIM_EXCHANGE").df()
+
+        pd_dim_date = df_dim_date.toPandas()
+        pd_fact = df_fact.toPandas()
+
+        with duckdb.connect(str(DUCKDB_PATH)) as conn:
+            conn.execute("SET schema = 'DataWarehouse'")
+
+            conn.execute("""
+                INSERT INTO DIM_DATE (date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday)
+                SELECT date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday FROM pd_dim_date
+                ON CONFLICT (date_key) DO NOTHING
+            """)
+
+            conn.execute("""
+                INSERT INTO FACT_STOCK_DAILY 
+                (date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend)
+                SELECT date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend 
+                FROM pd_fact
+            """)
+
+            date_count = conn.execute("SELECT COUNT(*) FROM DIM_DATE").fetchone()[0]
+            fact_count = conn.execute(
+                "SELECT COUNT(*) FROM FACT_STOCK_DAILY"
+            ).fetchone()[0]
+
+        logger.info(f"[Transform] DIM_DATE records : {date_count:,}")
+        logger.info(f"[Transform] FACT_STOCK_DAILY records: {fact_count:,}")
+        logger.info(
+            "[Transform] Successfully transformed dim_date, fact_stock_daily and loaded into DuckDB"
         )
-        dim_industry_db = spark.createDataFrame(
-            conn.execute(
-                "SELECT industry_key, industry_name, company_category FROM DIM_INDUSTRY"
-            ).df()
-        )
 
-    print("[Spark] Đang Transform DIM_DATE & FACT_STOCK_DAILY...")
-    df_dim_date = _build_dim_date(raw_ohlcs)
-    df_fact = _build_fact_stock_daily(
-        raw_ohlcs,
-        raw_companies,
-        raw_exchanges,
-        raw_industries,
-        dim_company_db,
-        dim_exchange_db,
-        dim_industry_db,
-    )
+    except Exception as e:
+        logger.error(f"[Transform] Error during transform_2 processing flow: {e}")
+        traceback.print_exc()
 
-    pd_dim_date = df_dim_date.toPandas()
-    pd_fact = df_fact.toPandas()
-
-    with duckdb.connect(str(DUCKDB_PATH)) as conn:
-        conn.execute("SET schema = 'DataWarehouse'")
-
-        conn.execute("""
-            INSERT INTO DIM_DATE (date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday)
-            SELECT date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday FROM pd_dim_date
-            ON CONFLICT (date_key) DO NOTHING
-        """)
-
-        conn.execute("""
-            INSERT INTO FACT_STOCK_DAILY 
-            (date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend)
-            SELECT date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend 
-            FROM pd_fact
-        """)
-
-    if should_stop_spark:
-        spark.stop()
+    finally:
+        if should_stop_spark:
+            spark.stop()
 
 
 if __name__ == "__main__":

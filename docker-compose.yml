@@ -181,6 +181,7 @@ services:
       - hadoop-namenode
     ports:
       - "9864:9864"
+      - "9866:9866"
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
       - HDFS_CONF_dfs_client_use_datanode_hostname=true
@@ -216,7 +217,7 @@ services:
     depends_on:
       - hadoop-namenode
     ports:
-      - "9866:9864"
+      - "9868:9864"
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
       - HDFS_CONF_dfs_client_use_datanode_hostname=true

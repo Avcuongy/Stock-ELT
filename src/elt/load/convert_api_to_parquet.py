@@ -14,6 +14,17 @@ DATA_COMPLETE_DIR = DATA_DIR / "completed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
+
 def _get_latest_file_in_directory(directory, extension):
     Path(directory).mkdir(parents=True, exist_ok=True)
 
@@ -31,7 +42,7 @@ def _get_latest_file_in_directory(directory, extension):
 def _export_to_parquet():
     latest_file = _get_latest_file_in_directory(DATA_RAW_DIR / "ohlcs", ".json")
     if not latest_file:
-        logging.warning("[Load] Warning: No raw OHLC file found.")
+        logger.warning("[Load] Warning: No raw OHLC file found.")
         return None
 
     with open(latest_file, "r", encoding="utf-8") as f:
@@ -79,27 +90,17 @@ def _export_to_parquet():
 
     df.to_parquet(output_file, engine="pyarrow", compression="snappy", index=False)
 
-    logging.info(
-        f"[Load] Converted {len(df)} OHLC records to Parquet at: {output_file}"
-    )
+    logger.info(f"[Load] Converted {len(df)} OHLC records to Parquet at: {output_file}")
 
     return output_file
 
 
 def convert_db_to_parquet():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
     try:
         _export_to_parquet()
 
     except Exception as e:
-        logging.error(f"[Load] Error: {e}")
+        logger.error(f"[Load] Error: {e}")
         traceback.print_exc()
 
 

@@ -22,6 +22,16 @@ TABLES = [
     "companies",
 ]
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_db_connection():
     connection_string = DATABASE_URL
@@ -46,7 +56,7 @@ def _export_to_parquet():
             df = pd.read_sql(query, engine)
 
             if df.empty:
-                logging.warning(
+                logger.warning(
                     f"[Load] Warning: Table '{table}' returned no data. Skipping Parquet file."
                 )
                 continue
@@ -62,34 +72,26 @@ def _export_to_parquet():
                 index=False,
             )
 
-            logging.info(
+            logger.info(
                 f"[Load] Exported table: {table} | Row exported: {len(df):,} | Saved to: {output_file}"
             )
 
             exported_files[table] = output_file
 
         if not exported_files:
-            logging.warning(
+            logger.warning(
                 "[Load] Warning: No tables were exported (all empty or errors)."
             )
 
         return exported_files
 
     except Exception as e:
-        logging.error(f"[Load] Error while exporting tables to Parquet: {e}")
+        logger.error(f"[Load] Error while exporting tables to Parquet: {e}")
         traceback.print_exc()
         sys.exit(1)
 
 
 def convert_db_to_parquet():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
     _export_to_parquet()
 
 
