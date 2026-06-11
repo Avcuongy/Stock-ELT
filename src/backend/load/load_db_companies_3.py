@@ -13,6 +13,16 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_latest_file_in_directory(directory, extension):
     files = [
@@ -40,10 +50,10 @@ def _load_companies(engine):
         DATA_PROCESSED_DIR / "companies", ".json"
     )
     if not latest_file:
-        logging.info("[Backend - Load] No processed companies file found.")
+        logger.info("[Backend - Load] No processed companies file found.")
         return
 
-    logging.info(f"[Backend - Load] Loading companies from: {latest_file}")
+    logger.info(f"[Backend - Load] Loading companies from: {latest_file}")
 
     with open(latest_file, "r", encoding="utf-8") as f:
         companies_data = json.load(f)
@@ -69,7 +79,7 @@ def _load_companies(engine):
                 location = company.get("location")
 
                 if not ticker or not company_name or not cik:
-                    logging.info(
+                    logger.info(
                         f"[Backend - Load] Skipping company with no ticker, name, or cik: {company}"
                     )
                     skipped += 1
@@ -88,7 +98,7 @@ def _load_companies(engine):
                     if exchange_row:
                         exchange_id = exchange_row[0]
                     else:
-                        logging.info(
+                        logger.info(
                             f"[Backend - Load] Warning: Exchange '{exchange_name}' not found for company '{ticker}'. Skipping."
                         )
                         errors += 1
@@ -196,42 +206,34 @@ def _load_companies(engine):
                     inserted += 1
 
                 if (idx + 1) % 1000 == 0:
-                    logging.info(f"[Backend - Load] Processed {idx + 1} companies...")
+                    logger.info(f"[Backend - Load] Processed {idx + 1} companies...")
 
             except IntegrityError as e:
                 skipped += 1
                 if skipped <= 10:
-                    logging.info(
+                    logger.info(
                         f"[Backend - Load] Skipped company {company.get('ticker')}: {e}"
                     )
             except Exception as e:
                 errors += 1
                 if errors <= 10:
-                    logging.error(
+                    logger.error(
                         f"[Backend - Load] Error processing company {company.get('ticker')}: {e}"
                     )
         conn.commit()
 
-    logging.info(
+    logger.info(
         f"[Backend - Load] Companies: {inserted} inserted, {updated} updated, {skipped} skipped, {errors} errors"
     )
 
 
 def load_db_companies():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.info("[Backend - Load] Loading Companies to MySQL")
+    logger.info("[Backend - Load] Loading Companies to MySQL")
     try:
         engine = _get_db_connection()
         _load_companies(engine)
     except Exception as e:
-        logging.error(f"[Backend - Load] Error: {e}")
+        logger.error(f"[Backend - Load] Error: {e}")
         traceback.print_exc()
         sys.exit(1)
 

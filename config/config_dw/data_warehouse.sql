@@ -12,7 +12,6 @@ CREATE SEQUENCE IF NOT EXISTS seq_exchange_key START 1;
 -- DIM DATA
 CREATE TABLE DIM_DATE (
     date_key INTEGER PRIMARY KEY,
-    -- Format YYYYMMDD
     full_date TIMESTAMP,
     day INTEGER,
     month INTEGER,

@@ -11,6 +11,16 @@ DATA_RAW_DIR = DATA_DIR / "raw"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_latest_file_in_directory(directory, extension):
     files = [
@@ -25,17 +35,9 @@ def _get_latest_file_in_directory(directory, extension):
 
 
 def transform_companies():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
     latest_file = _get_latest_file_in_directory(DATA_RAW_DIR / "companies", ".json")
     if not latest_file:
-        logging.info("[Backend - Transform] No raw companies file found.")
+        logger.info("[Backend - Transform] No raw companies file found.")
         return
 
     with open(latest_file, "r", encoding="utf-8") as f:
@@ -66,7 +68,7 @@ def transform_companies():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(companies, f, indent=2, ensure_ascii=False)
 
-    logging.info(f"[Backend - Transform] Transformed {len(companies)} companies.")
+    logger.info(f"[Backend - Transform] Transformed {len(companies)} companies.")
 
     return companies
 

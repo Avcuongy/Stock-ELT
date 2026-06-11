@@ -1,22 +1,33 @@
-from __future__ import annotations
-
 import os
+import sys
+import logging
 from pathlib import Path
-
 from hdfs import InsecureClient
-from utils import HDFS_BASE_DIR
+import warnings
+
+warnings.filterwarnings("ignore")
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
+DATA_DIR = PROJECT_ROOT / "data"
+WEBHDFS_URL = "http://localhost:9870"
+HDFS_USER = "root"
+HDFS_BASE_DIR = "/data_lake"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
 
 
 def _get_hdfs_client() -> InsecureClient:
-    """Create a WebHDFS client using environment variables.
-
-    Expected env vars (with defaults):
-    - WebHDFS URL: http://localhost:9870
-    - HDFS_USER: HDFS user (default: "root")
-    """
-
-    url = "http://localhost:9870"
-    user = "root"
+    url = WEBHDFS_URL
+    user = HDFS_USER
 
     return InsecureClient(url, user=user)
 
@@ -24,14 +35,7 @@ def _get_hdfs_client() -> InsecureClient:
 def _upload_parquet_folders(
     client: InsecureClient, local_completed_dir: Path, hdfs_base_dir: str
 ) -> None:
-    """Upload local Parquet files under data/completed to HDFS via WebHDFS.
-
-    Mirrors the behavior of load_parquet_to_hdfs.sh:
-      - db_to_dl   -> <HDFS_BASE_DIR>/db
-      - news_to_dl -> <HDFS_BASE_DIR>/news
-      - ohlcs_to_dl-> <HDFS_BASE_DIR>/ohlcs
-      - markets_to_dl -> <HDFS_BASE_DIR>/markets
-    """
+    """Upload local Parquet files under data/completed to HDFS via WebHDFS."""
 
     mapping = {
         "db": "db",
@@ -47,44 +51,38 @@ def _upload_parquet_folders(
         )
 
         if not local_path.is_dir():
-            print(f"[SKIP] Local directory not found: {local_path}")
+            logger.info(f"[Load] Local directory not found: {local_path}")
             continue
 
         parquet_files = sorted(local_path.glob("*.parquet"))
         if not parquet_files:
-            print(f"[SKIP] No Parquet files in: {local_path}")
+            logger.info(f"[Load] No Parquet files in: {local_path}")
             continue
-
-        print(f"\nUploading from {local_path} to {hdfs_target}")
 
         client.makedirs(hdfs_target)
 
         for file_path in parquet_files:
             dest_path = f"{hdfs_target}/{file_path.name}"
-            print(f"  -> Putting {file_path.name} -> {dest_path}")
-            client.upload(hdfs_target, str(file_path), overwrite=True)
+            logger.info(f"[Load] Putting {file_path.name} to {dest_path}")
+
+            client.upload(dest_path, str(file_path), overwrite=True)
 
 
 def load_to_hdfs() -> None:
-    base_dir = Path(__file__).resolve().parents[3]
-    local_completed_dir = base_dir / "data" / "completed"
-    hdfs_base_dir = f"{HDFS_BASE_DIR}"
+    local_completed_dir = DATA_DIR / "completed"
 
-    print("=" * 45)
-    print("Loading Parquet files into HDFS (WebHDFS)")
-    print("Project root:    ", base_dir)
-    print("Local completed: ", local_completed_dir)
-    print("HDFS base dir:   ", hdfs_base_dir)
-    print("WEBHDFS url:     ", "http://localhost:9870")
-    print("=" * 45)
+    hdfs_base_dir = HDFS_BASE_DIR
+
+    logger.info("[Load] Loading Parquet files into HDFS (WebHDFS)")
+    logger.info("[Load] Local completed : %s", local_completed_dir)
+    logger.info("[Load] HDFS base dir   : %s", hdfs_base_dir)
+    logger.info("[Load] WEBHDFS url     : %s", os.getenv("WEBHDFS_URL", WEBHDFS_URL))
 
     client = _get_hdfs_client()
 
     _upload_parquet_folders(client, local_completed_dir, hdfs_base_dir)
 
-    print("\n" + "=" * 45)
-    print("HDFS load completed (WebHDFS).")
-    print("=" * 45)
+    logger.info("[Load] HDFS load completed (WebHDFS).")
 
 
 if __name__ == "__main__":

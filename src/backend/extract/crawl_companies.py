@@ -12,21 +12,22 @@ SEC_API_KEY = SEC_API_KEY
 EXCHANGES = ["nasdaq", "nyse"]
 COMPANY_LIMIT = 1000
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def crawl_companies():
     """
     Crawl company data from SEC API for NYSE and NASDAQ.
     Saves data to ./data/raw/companies/crawl_companies_{date}.json
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-
     list_companies = []
 
     for exchange in EXCHANGES:
@@ -34,7 +35,7 @@ def crawl_companies():
         response = requests.get(url)
         data = response.json()
         list_companies.extend(data)
-        logging.info(
+        logger.info(
             f"[Backend - Extract] Extracted {len(data)} companies from the {exchange.upper()} stock exchange."
         )
 
@@ -50,7 +51,7 @@ def crawl_companies():
     with open(path, "w") as outfile:
         outfile.write(json_payload)
 
-    logging.info(
+    logger.info(
         f"[Backend - Extract] Successfully saved {len(list_companies)} companies to {path}"
     )
     return path

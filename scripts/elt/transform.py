@@ -8,19 +8,22 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.info("[Extract] ETL Start")
+    logger.info("[Transform] ETL Start")
 
-    logging.info("[Extract] ETL Finished")
+    logger.info("[Transform] ETL Finished")
+
 
 if __name__ == "__main__":
     main()

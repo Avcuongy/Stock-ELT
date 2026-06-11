@@ -12,6 +12,16 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_latest_file_in_directory(directory, extension):
     files = [
@@ -37,10 +47,10 @@ def _get_db_connection():
 def _load_regions(engine):
     latest_file = _get_latest_file_in_directory(DATA_PROCESSED_DIR / "regions", ".json")
     if not latest_file:
-        logging.info("[Backend - Load] No processed regions file found.")
+        logger.info("[Backend - Load] No processed regions file found.")
         return
 
-    logging.info(f"[Backend - Load] Loading regions from: {latest_file}")
+    logger.info(f"[Backend - Load] Loading regions from: {latest_file}")
 
     with open(latest_file, "r", encoding="utf-8") as f:
         regions_data = json.load(f)
@@ -76,16 +86,16 @@ def _load_regions(engine):
 
             except IntegrityError as e:
                 skipped += 1
-                logging.info(
+                logger.info(
                     f"[Backend - Load] Skipped region {region.get('region')}: {e}"
                 )
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"[Backend - Load] Error inserting region {region.get('region')}: {e}"
                 )
         conn.commit()
 
-    logging.info(
+    logger.info(
         f"[Backend - Load] Regions: {inserted} inserted/updated, {skipped} skipped"
     )
 
@@ -95,10 +105,10 @@ def _load_industries(engine):
         DATA_PROCESSED_DIR / "industries", ".json"
     )
     if not latest_file:
-        logging.info("[Backend - Load] No processed industries file found.")
+        logger.info("[Backend - Load] No processed industries file found.")
         return
 
-    logging.info(f"[Backend - Load] Loading industries from: {latest_file}")
+    logger.info(f"[Backend - Load] Loading industries from: {latest_file}")
 
     with open(latest_file, "r", encoding="utf-8") as f:
         industries_data = json.load(f)
@@ -128,16 +138,16 @@ def _load_industries(engine):
 
             except IntegrityError as e:
                 skipped += 1
-                logging.info(
+                logger.info(
                     f"[Backend - Load] Skipped industry {industry.get('industry')}: {e}"
                 )
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"[Backend - Load] Error inserting industry {industry.get('industry')}: {e}"
                 )
         conn.commit()
 
-    logging.info(
+    logger.info(
         f"[Backend - Load] Industries: {inserted} inserted/updated, {skipped} skipped"
     )
 
@@ -148,10 +158,10 @@ def _load_sicindustries(engine):
     )
 
     if not latest_file:
-        logging.info("[Backend - Load] No processed sicindustries file found.")
+        logger.info("[Backend - Load] No processed sicindustries file found.")
         return
 
-    logging.info(f"[Backend - Load] Loading SIC industries from: {latest_file}")
+    logger.info(f"[Backend - Load] Loading SIC industries from: {latest_file}")
 
     with open(latest_file, "r", encoding="utf-8") as f:
         sic_data = json.load(f)
@@ -186,28 +196,20 @@ def _load_sicindustries(engine):
 
             except IntegrityError as e:
                 skipped += 1
-                logging.info(f"[Backend - Load] Skipped SIC {sic.get('sic')}: {e}")
+                logger.info(f"[Backend - Load] Skipped SIC {sic.get('sic')}: {e}")
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"[Backend - Load] Error inserting SIC {sic.get('sic')}: {e}"
                 )
         conn.commit()
 
-    logging.info(
+    logger.info(
         f"[Backend - Load] SIC Industries: {inserted} inserted/updated, {skipped} skipped"
     )
 
 
 def load_db_others():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.info(
+    logger.info(
         "[Backend - Load] Loading Regions + Industries + SIC Industries to MySQL"
     )
     try:
@@ -216,7 +218,7 @@ def load_db_others():
         _load_industries(engine)
         _load_sicindustries(engine)
     except Exception as e:
-        logging.error(f"[Backend - Load] Error: {e}")
+        logger.error(f"[Backend - Load] Error: {e}")
         sys.exit(1)
 
 

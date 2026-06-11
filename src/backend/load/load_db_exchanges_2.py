@@ -12,6 +12,16 @@ DATA_DIR = PROJECT_ROOT / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "processed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def _get_latest_file_in_directory(directory, extension):
     files = [
@@ -39,10 +49,10 @@ def _load_exchanges(engine):
         DATA_PROCESSED_DIR / "exchanges", ".json"
     )
     if not latest_file:
-        logging.info("[Backend - Load] No processed exchanges file found.")
+        logger.info("[Backend - Load] No processed exchanges file found.")
         return
 
-    logging.info(f"[Backend - Load] Loading exchanges from: {latest_file}")
+    logger.info(f"[Backend - Load] Loading exchanges from: {latest_file}")
 
     with open(latest_file, "r", encoding="utf-8") as f:
         exchanges_data = json.load(f)
@@ -58,7 +68,7 @@ def _load_exchanges(engine):
                 region_name = exchange.get("region")
 
                 if not exchange_name:
-                    logging.info(
+                    logger.info(
                         f"[Backend - Load] Skipping exchange with no name: {exchange}"
                     )
                     skipped += 1
@@ -71,7 +81,7 @@ def _load_exchanges(engine):
                 region_row = result.fetchone()
 
                 if not region_row:
-                    logging.info(
+                    logger.info(
                         f"[Backend - Load] Warning: Region '{region_name}' not found for exchange '{exchange_name}'. Skipping."
                     )
                     errors += 1
@@ -91,35 +101,27 @@ def _load_exchanges(engine):
 
             except IntegrityError as e:
                 skipped += 1
-                logging.info(
+                logger.info(
                     f"[Backend - Load] Skipped exchange {exchange.get('name')}: {e}"
                 )
             except Exception as e:
                 errors += 1
-                logging.error(
+                logger.error(
                     f"[Backend - Load] Error inserting exchange {exchange.get('name')}: {e}"
                 )
         conn.commit()
-    logging.info(
+    logger.info(
         f"[Backend - Load] Exchanges: {inserted} inserted/updated, {skipped} skipped, {errors} errors"
     )
 
 
 def load_db_exchanges():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
-    logging.info("[Backend - Load] Loading Exchanges to MySQL")
+    logger.info("[Backend - Load] Loading Exchanges to MySQL")
     try:
         engine = _get_db_connection()
         _load_exchanges(engine)
     except Exception as e:
-        logging.error(f"[Backend - Load] Error: {e}")
+        logger.error(f"[Backend - Load] Error: {e}")
         sys.exit(1)
 
 

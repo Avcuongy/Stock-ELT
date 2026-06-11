@@ -11,20 +11,22 @@ LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 API_KEY = ALPHAVANTAGE_API_KEY
 FUNCTION = "MARKET_STATUS"
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
 
 def crawl_markets():
     """
     Crawl market status data from Alpha Vantage API.
     Saves data to ./data/raw/markets/crawl_markets_{date}.json
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
     url = f"https://www.alphavantage.co/query?function={FUNCTION}&apikey={API_KEY}"
 
     response = requests.get(url)
@@ -40,7 +42,7 @@ def crawl_markets():
     with open(path, "w") as outfile:
         outfile.write(json_payload)
 
-    logging.info(
+    logger.info(
         f"[Backend - Extract] Successfully saved {len(data)} regions and exchanges to {path}"
     )
     return path

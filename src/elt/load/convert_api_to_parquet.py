@@ -15,6 +15,8 @@ LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 
 
 def _get_latest_file_in_directory(directory, extension):
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
     files = [
         os.path.join(directory, f)
         for f in os.listdir(directory)
@@ -38,30 +40,48 @@ def _export_to_parquet():
     processed_ohlcs = []
     for record in ohlc_data:
         processed_record = {
-            "ticker": record.get("T"),
-            "volume": record.get("v"),
-            "vwap": record.get("vw"),
-            "open": record.get("o"),
-            "close": record.get("c"),
-            "high": record.get("h"),
-            "low": record.get("l"),
-            "timestamp": record.get("t"),
-            "transactions": record.get("n"),
+            "ticker": record.get("ticker", record.get("T")),
+            "open": record.get("open", record.get("o")),
+            "high": record.get("high", record.get("h")),
+            "low": record.get("low", record.get("l")),
+            "close": record.get("close", record.get("c")),
+            "volume": record.get("volume", record.get("v")),
+            "vwap": record.get("vwap", record.get("vw")),
+            "timestamp": record.get("timestamp", record.get("t")),
+            "transactions": record.get("transactions", record.get("n")),
+            "otc": record.get("otc", False),
         }
         processed_ohlcs.append(processed_record)
 
     df = pd.DataFrame(processed_ohlcs)
-
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    type_mapping = {
+        "ticker": "string",
+        "open": "float64",
+        "high": "float64",
+        "low": "float64",
+        "close": "float64",
+        "volume": "float64",
+        "vwap": "float64",
+        "transactions": "Int64",
+        "otc": "boolean",
+    }
 
-    timestamp = datetime.datetime.now().strftime("%Y_%m_%d")
-    output_file = os.path.join(
-        DATA_COMPLETE_DIR / "ohlcs", f"ohlcs_{timestamp}.parquet"
-    )
+    for col, dtype in type_mapping.items():
+        if col in df.columns:
+            df[col] = df[col].astype(dtype)
+
+    timestamp_str = datetime.datetime.now().strftime("%Y_%m_%d")
+    output_dir = DATA_COMPLETE_DIR / "ohlcs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"ohlcs_{timestamp_str}.parquet"
+
     df.to_parquet(output_file, engine="pyarrow", compression="snappy", index=False)
 
-    logging.info(f"[Load] Converted {len(df)} OHLC records to Parquet: {output_file}")
+    logging.info(
+        f"[Load] Converted {len(df)} OHLC records to Parquet at: {output_file}"
+    )
 
     return output_file
 
@@ -76,9 +96,7 @@ def convert_db_to_parquet():
         ],
     )
     try:
-        ohlc_file = _export_to_parquet()
-        if ohlc_file:
-            logging.info(f"[Load] Successfully saved OHLC data to: {ohlc_file}")
+        _export_to_parquet()
 
     except Exception as e:
         logging.error(f"[Load] Error: {e}")
