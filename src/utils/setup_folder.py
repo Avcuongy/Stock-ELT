@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 import logging
+import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = PROJECT_ROOT / "data"
+LOGS_DIR = PROJECT_ROOT / "logs" / "config.log"
 DATA_SUBFOLDERS = [
     # completed layer
     "completed/db_to_dl",
@@ -30,9 +32,17 @@ def _ensure_data_folders() -> None:
 
 
 def setup_folder() -> None:
-    print(f"[Config] Make data folders at: {DATA_ROOT}")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
+    logging.info(f"[Config] Make data folders at: {DATA_ROOT}")
     _ensure_data_folders()
-    print("[Config] Data folder structure is ready")
+    logging.info("[Config] Data folder structure is ready")
 
 
 if __name__ == "__main__":

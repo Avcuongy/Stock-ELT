@@ -14,6 +14,13 @@ DATA_RAW_DIR = DATA_DIR / "raw"
 DATA_COMPLETE_DIR = DATA_DIR / "complete"
 LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 DATABASE_URL = DATABASE_URL
+TABLES = [
+    "regions",
+    "exchanges",
+    "industries",
+    "sicindustries",
+    "companies",
+]
 
 
 def _get_db_connection():
@@ -27,14 +34,6 @@ def _get_db_connection():
 
 def _export_to_parquet():
 
-    tables = [
-        "regions",
-        "exchanges",
-        "industries",
-        "sicindustries",
-        "companies",
-    ]
-
     timestamp = datetime.datetime.now().strftime("%Y_%m_%d")
 
     try:
@@ -42,7 +41,7 @@ def _export_to_parquet():
 
         exported_files = {}
 
-        for table in tables:
+        for table in TABLES:
             query = f"SELECT * FROM {table}"
             df = pd.read_sql(query, engine)
 

@@ -55,9 +55,10 @@ def _load_regions(engine):
                 local_close = region.get("local_close", "00:00")
 
                 sql = text("""
-                    INSERT INTO regions (region_name, region_local_open, region_local_close)
-                    VALUES (:name, :open, :close)
+                    INSERT INTO regions (region_name, region_market_type, region_local_open, region_local_close)
+                    VALUES (:name, :market_type, :open, :close)
                     ON DUPLICATE KEY UPDATE
+                        region_market_type = :market_type,
                         region_local_open = :open,
                         region_local_close = :close
                 """)
@@ -66,6 +67,7 @@ def _load_regions(engine):
                     sql,
                     {
                         "name": region.get("region"),
+                        "market_type": region.get("market_type"),
                         "open": local_open,
                         "close": local_close,
                     },

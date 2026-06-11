@@ -7,7 +7,7 @@ from hdfs import InsecureClient
 from utils import HDFS_BASE_DIR
 
 
-def get_hdfs_client() -> InsecureClient:
+def _get_hdfs_client() -> InsecureClient:
     """Create a WebHDFS client using environment variables.
 
     Expected env vars (with defaults):
@@ -21,7 +21,7 @@ def get_hdfs_client() -> InsecureClient:
     return InsecureClient(url, user=user)
 
 
-def upload_parquet_folders(
+def _upload_parquet_folders(
     client: InsecureClient, local_completed_dir: Path, hdfs_base_dir: str
 ) -> None:
     """Upload local Parquet files under data/completed to HDFS via WebHDFS.
@@ -35,7 +35,6 @@ def upload_parquet_folders(
 
     mapping = {
         "db_to_dl": "db",
-        "news_to_dl": "news",
         "ohlcs_to_dl": "ohlcs",
         "markets_to_dl": "markets",
     }
@@ -59,17 +58,15 @@ def upload_parquet_folders(
 
         print(f"\nUploading from {local_path} to {hdfs_target}")
 
-        # Ensure target directory exists
         client.makedirs(hdfs_target)
 
         for file_path in parquet_files:
             dest_path = f"{hdfs_target}/{file_path.name}"
             print(f"  -> Putting {file_path.name} -> {dest_path}")
-            # overwrite=True to mirror `hdfs dfs -put -f`
             client.upload(hdfs_target, str(file_path), overwrite=True)
 
 
-def main() -> None:
+def load_to_hdfs() -> None:
     base_dir = Path(__file__).resolve().parents[3]
     local_completed_dir = base_dir / "data" / "completed"
     hdfs_base_dir = f"{HDFS_BASE_DIR}"
@@ -82,9 +79,9 @@ def main() -> None:
     print("WEBHDFS url:     ", "http://localhost:9870")
     print("=" * 45)
 
-    client = get_hdfs_client()
+    client = _get_hdfs_client()
 
-    upload_parquet_folders(client, local_completed_dir, hdfs_base_dir)
+    _upload_parquet_folders(client, local_completed_dir, hdfs_base_dir)
 
     print("\n" + "=" * 45)
     print("HDFS load completed (WebHDFS).")
@@ -92,4 +89,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    load_to_hdfs()

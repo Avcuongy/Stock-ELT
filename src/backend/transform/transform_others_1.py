@@ -72,12 +72,16 @@ def _transform_regions(markets_data):
     for item in markets_data:
         region = item.get("region", "")
         market_type = item.get("market_type", "")
+        local_open = item.get("local_open", "")
+        local_close = item.get("local_close", "")
 
         if region and region not in regions_dict:
             regions_dict[region] = {
                 "id": _generate_id(region),
                 "region": region,
                 "market_type": market_type,
+                "local_open": local_open,
+                "local_close": local_close,
             }
 
     return list(regions_dict.values())

@@ -7,6 +7,7 @@ USE datasource;
 CREATE TABLE IF NOT EXISTS regions (
     region_id INT AUTO_INCREMENT PRIMARY KEY,
     region_name VARCHAR(50) UNIQUE NOT NULL,
+    region_market_type VARCHAR(50) NOT NULL,
     region_local_open TIME NOT NULL,
     region_local_close TIME NOT NULL,
     region_update_time_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
