@@ -1,89 +1,76 @@
-CREATE SCHEMA IF NOT EXISTS data_warehouse;
+CREATE SCHEMA IF NOT EXISTS DataWarehouse;
 
 SET schema
-    'data_warehouse';
+    = 'DataWarehouse';
 
--- Dimension Tables (DIM)
--- DIM_DATE
-CREATE TABLE IF NOT EXISTS dim_date (
+CREATE SEQUENCE IF NOT EXISTS seq_company_key START 1;
+
+CREATE SEQUENCE IF NOT EXISTS seq_industry_key START 1;
+
+CREATE SEQUENCE IF NOT EXISTS seq_exchange_key START 1;
+
+-- DIM DATA
+CREATE TABLE DIM_DATE (
     date_key INTEGER PRIMARY KEY,
-    -- surrogate key (có thể = yyyymmdd)
-    full_date DATE NOT NULL,
-    month INTEGER NOT NULL,
-    quarter INTEGER NOT NULL,
-    year INTEGER NOT NULL
+    -- Format YYYYMMDD
+    full_date TIMESTAMP,
+    day INTEGER,
+    month INTEGER,
+    year INTEGER,
+    quarter INTEGER,
+    day_of_week VARCHAR,
+    week_of_year INTEGER,
+    is_weekend BOOLEAN,
+    is_holiday BOOLEAN
 );
 
 -- DIM_COMPANY
-CREATE TABLE IF NOT EXISTS dim_company (
-    company_key INTEGER PRIMARY KEY,
-    -- surrogate key
-    company_ticker VARCHAR NOT NULL,
+CREATE TABLE DIM_COMPANY (
+    company_key INTEGER DEFAULT nextval('seq_company_key') PRIMARY KEY,
+    company_ticker VARCHAR,
     company_name VARCHAR,
+    company_cik VARCHAR,
     company_is_delisted BOOLEAN,
-    exchange_name VARCHAR,
-    industry_name VARCHAR,
+    company_location VARCHAR
+);
+
+-- DIM_INDUSTRY
+CREATE TABLE DIM_INDUSTRY (
+    industry_key INTEGER DEFAULT nextval('seq_industry_key') PRIMARY KEY,
     industry_sector VARCHAR,
-    sic_industries VARCHAR
+    industry_name VARCHAR,
+    company_category VARCHAR,
+    sic_industry VARCHAR,
+    sic_sector VARCHAR
 );
 
--- DIM_NEWS_SOURCE
-CREATE TABLE IF NOT EXISTS dim_news_source (
-    source_key INTEGER PRIMARY KEY,
-    -- surrogate key
-    source VARCHAR NOT NULL,
-    source_domain VARCHAR
+-- DIM_EXCHANGE
+CREATE TABLE DIM_EXCHANGE (
+    exchange_key INTEGER DEFAULT nextval('seq_exchange_key') PRIMARY KEY,
+    exchange_name VARCHAR,
+    region_name VARCHAR,
+    region_market_type VARCHAR,
+    region_local_open TIME,
+    region_local_close TIME
 );
 
--- DIM_TOPIC
-CREATE TABLE IF NOT EXISTS dim_topic (
-    topic_key INTEGER PRIMARY KEY,
-    -- surrogate key
-    topic VARCHAR NOT NULL
-);
-
--- Fact Tables (FACT)
 -- FACT_STOCK_DAILY
-CREATE TABLE IF NOT EXISTS fact_stock_daily (
-    -- key
-    date_key INTEGER NOT NULL,
-    company_key INTEGER NOT NULL,
-    -- measures
+CREATE TABLE FACT_STOCK_DAILY (
+    date_key INTEGER,
+    company_key INTEGER,
+    industry_key INTEGER,
+    exchange_key INTEGER,
+    -- Metrics
     open_price DECIMAL(18, 4),
     high_price DECIMAL(18, 4),
     low_price DECIMAL(18, 4),
     close_price DECIMAL(18, 4),
     volume BIGINT,
-    volume_weighted_avg_price DECIMAL(18, 6),
-    trade_count BIGINT,
-    -- constraints
-    CONSTRAINT fk_fact_stock_date FOREIGN KEY (date_key) REFERENCES dim_date(date_key)
-);
-
--- FACT_NEWS_SENTIMENT
-CREATE TABLE IF NOT EXISTS fact_news_sentiment (
-    news_key BIGINT PRIMARY KEY,
-    -- degenerate dimension / natural key
-    date_key INTEGER NOT NULL,
-    source_key INTEGER,
-    company_key INTEGER,
-    title VARCHAR,
-    url VARCHAR,
-    overall_sentiment_score DECIMAL(9, 6),
-    overall_sentiment_label VARCHAR,
-    ticker_relevance_score DECIMAL(9, 6),
-    ticker_sentiment_score DECIMAL(9, 6),
-    ticker_sentiment_label VARCHAR,
-    CONSTRAINT fk_fact_news_date FOREIGN KEY (date_key) REFERENCES dim_date(date_key),
-    CONSTRAINT fk_fact_news_source FOREIGN KEY (source_key) REFERENCES dim_news_source(source_key),
-    CONSTRAINT fk_fact_news_company FOREIGN KEY (company_key) REFERENCES dim_company(company_key)
-);
-
--- BRIDGE_NEWS_TOPIC
-CREATE TABLE IF NOT EXISTS bridge_news_topic (
-    news_key BIGINT NOT NULL,
-    topic_key INTEGER NOT NULL,
-    relevance_score DECIMAL(9, 6),
-    CONSTRAINT pk_bridge_news_topic PRIMARY KEY (news_key, topic_key),
-    CONSTRAINT fk_bridge_topic FOREIGN KEY (topic_key) REFERENCES dim_topic(topic_key)
+    price_change DECIMAL(18, 4),
+    price_trend VARCHAR,
+    -- Foreign Key Constraints
+    FOREIGN KEY (date_key) REFERENCES DIM_DATE(date_key),
+    FOREIGN KEY (company_key) REFERENCES DIM_COMPANY(company_key),
+    FOREIGN KEY (industry_key) REFERENCES DIM_INDUSTRY(industry_key),
+    FOREIGN KEY (exchange_key) REFERENCES DIM_EXCHANGE(exchange_key)
 );

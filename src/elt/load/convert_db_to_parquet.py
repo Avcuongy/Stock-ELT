@@ -11,7 +11,7 @@ from utils.config_env import DATABASE_URL
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_RAW_DIR = DATA_DIR / "raw"
-DATA_COMPLETE_DIR = DATA_DIR / "complete"
+DATA_COMPLETE_DIR = DATA_DIR / "completed"
 LOGS_DIR = PROJECT_ROOT / "logs" / "elt.log"
 DATABASE_URL = DATABASE_URL
 TABLES = [
@@ -52,7 +52,7 @@ def _export_to_parquet():
                 continue
 
             output_file = os.path.join(
-                DATA_COMPLETE_DIR, f"{table}_{timestamp}.parquet"
+                DATA_COMPLETE_DIR / "db", f"{table}_{timestamp}.parquet"
             )
 
             df.to_parquet(
@@ -62,17 +62,11 @@ def _export_to_parquet():
                 index=False,
             )
 
-            logging.info(f"[Load] Rows exported   : {len(df):,}")
-            logging.info(f"[Load] Columns         : {list(df.columns)}")
-            logging.info(f"[Load] Saved to        : {output_file}")
             logging.info(
-                f"[Load] File size (MB)  : {os.path.getsize(output_file) / (1024 * 1024):.2f}"
+                f"[Load] Exported table: {table} | Row exported: {len(df):,} | Saved to: {output_file}"
             )
 
             exported_files[table] = output_file
-
-        for tbl, path in exported_files.items():
-            logging.info(f"[Load]  - {tbl}: {path}")
 
         if not exported_files:
             logging.warning(

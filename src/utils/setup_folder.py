@@ -9,8 +9,8 @@ DATA_ROOT = PROJECT_ROOT / "data"
 LOGS_DIR = PROJECT_ROOT / "logs" / "config.log"
 DATA_SUBFOLDERS = [
     # completed layer
-    "completed/db_to_dl",
-    "completed/ohlcs_to_dl",
+    "completed/db",
+    "completed/ohlcs",
     # processed layer
     "processed/companies",
     "processed/exchanges",

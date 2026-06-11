@@ -56,14 +56,12 @@ def _export_to_parquet():
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
 
     timestamp = datetime.datetime.now().strftime("%Y_%m_%d")
-    output_file = os.path.join(DATA_COMPLETE_DIR, f"ohlcs_{timestamp}.parquet")
+    output_file = os.path.join(
+        DATA_COMPLETE_DIR / "ohlcs", f"ohlcs_{timestamp}.parquet"
+    )
     df.to_parquet(output_file, engine="pyarrow", compression="snappy", index=False)
 
-    logging.info(f"[Load] Converted {len(df)} OHLC records to Parquet")
-    logging.info(f"[Load] Saved to: {output_file}")
-    logging.info(
-        f"[Load] File size: {os.path.getsize(output_file) / (1024 * 1024):.2f} MB"
-    )
+    logging.info(f"[Load] Converted {len(df)} OHLC records to Parquet: {output_file}")
 
     return output_file
 
@@ -80,7 +78,7 @@ def convert_db_to_parquet():
     try:
         ohlc_file = _export_to_parquet()
         if ohlc_file:
-            logging.info(f"[Load] OHLC: {ohlc_file}")
+            logging.info(f"[Load] Successfully saved OHLC data to: {ohlc_file}")
 
     except Exception as e:
         logging.error(f"[Load] Error: {e}")

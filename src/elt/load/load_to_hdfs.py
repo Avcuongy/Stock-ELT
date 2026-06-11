@@ -34,9 +34,8 @@ def _upload_parquet_folders(
     """
 
     mapping = {
-        "db_to_dl": "db",
-        "ohlcs_to_dl": "ohlcs",
-        "markets_to_dl": "markets",
+        "db": "db",
+        "ohlcs": "ohlcs",
     }
 
     hdfs_base_dir = hdfs_base_dir.rstrip("/") or "/"
