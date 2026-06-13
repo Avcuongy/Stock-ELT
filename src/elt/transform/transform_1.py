@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
 DUCKDB_PATH = PROJECT_ROOT / "data_warehouse.duckdb"
-HDFS_RPC_URL = "hdfs://localhost:9000"
+HDFS_RPC_URL = "hdfs://hadoop-namenode:9000"
 HDFS_BASE_DIR = "/data_lake"
 HDFS_DB_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/db"
 HDFS_OHLCS_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/ohlcs"
@@ -25,7 +25,7 @@ logger = get_logger(__name__, "elt")
 
 def _get_spark_session():
     return (
-        SparkSession.builder.appName("elt_transform")
+        SparkSession.builder.appName("elt_transform_dims")
         .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
         .getOrCreate()
     )
@@ -33,13 +33,18 @@ def _get_spark_session():
 
 def _build_dim_company(spark: SparkSession):
     raw_companies = spark.read.parquet(f"{HDFS_DB_DIR}/companies_*.parquet")
+
     df_dim_company = raw_companies.select(
         col("company_ticker"),
         col("company_name"),
         col("company_cik"),
         col("company_is_delisted").cast("boolean"),
         col("company_location"),
-    ).distinct()
+    )
+
+    df_dim_company = df_dim_company.dropna(subset=["company_ticker"])
+    df_dim_company = df_dim_company.dropDuplicates(subset=["company_ticker"])
+
     return df_dim_company
 
 
@@ -47,21 +52,21 @@ def _build_dim_exchange(spark: SparkSession):
     raw_exchanges = spark.read.parquet(f"{HDFS_DB_DIR}/exchanges_*.parquet")
     raw_regions = spark.read.parquet(f"{HDFS_DB_DIR}/regions_*.parquet")
 
-    df_dim_exchange = (
-        raw_exchanges.join(
-            raw_regions,
-            raw_exchanges.exchange_region_id == raw_regions.region_id,
-            "left",
-        )
-        .select(
-            col("exchange_name"),
-            col("region_name"),
-            col("region_market_type"),
-            col("region_local_open"),
-            col("region_local_close"),
-        )
-        .distinct()
+    df_dim_exchange = raw_exchanges.join(
+        raw_regions,
+        raw_exchanges.exchange_region_id == raw_regions.region_id,
+        "left",
+    ).select(
+        col("exchange_name"),
+        col("region_name"),
+        col("region_market_type"),
+        col("region_local_open"),
+        col("region_local_close"),
     )
+
+    df_dim_exchange = df_dim_exchange.dropna(subset=["exchange_name"])
+    df_dim_exchange = df_dim_exchange.dropDuplicates(subset=["exchange_name"])
+
     return df_dim_exchange
 
 
@@ -84,8 +89,15 @@ def _build_dim_industry(spark: SparkSession):
             col("sic_industry"),
             col("sic_sector"),
         )
-        .distinct()
     )
+
+    df_dim_industry = df_dim_industry.dropna(
+        subset=["industry_sector", "industry_name"]
+    )
+    df_dim_industry = df_dim_industry.dropDuplicates(
+        subset=["industry_sector", "industry_name", "company_category"]
+    )
+
     return df_dim_industry
 
 
@@ -103,15 +115,14 @@ def transform_1(spark: SparkSession = None):
     pd_dim_exchange = df_dim_exchange.toPandas()
     pd_dim_industry = df_dim_industry.toPandas()
 
-    # fix exchange local open/close time format to HH:MM:SS
     for c in ["region_local_open", "region_local_close"]:
         pd_dim_exchange[c] = (
             pd.to_timedelta(pd_dim_exchange[c])
             .astype(str)
             .str.extract(r"(\d{2}:\d{2}:\d{2})")[0]
         )
+        pd_dim_exchange[c] = pd_dim_exchange[c].fillna("00:00:00")
 
-    logger.info("[Transform] Inserting tables into DuckDB with SCD is_current flag")
     with duckdb.connect(str(DUCKDB_PATH)) as conn:
         conn.execute("SET schema = 'DataWarehouse'")
 
@@ -138,7 +149,7 @@ def transform_1(spark: SparkSession = None):
     logger.info(f"[Transform] DIM_EXCHANGE records: {exchange_count:,}")
     logger.info(f"[Transform] DIM_INDUSTRY records: {industry_count:,}")
     logger.info(
-        "[Transform] Successfully transformed dim_company, dim_exchange, dim_industry and loaded into DuckDB"
+        "[Transform] Successfully transformed dim_company, dim_exchange, and dim_industry and loaded into DuckDB"
     )
 
     if should_stop_spark:

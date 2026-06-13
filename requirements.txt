@@ -6,11 +6,14 @@ openpyxl
 pyarrow
 numpy
 pandas
+statsmodels
+scipy
 hdfs
 apache-airflow
 pyspark
 matplotlib
 seaborn
+scikit-learn
 pymysql
 sqlalchemy
 duckdb
