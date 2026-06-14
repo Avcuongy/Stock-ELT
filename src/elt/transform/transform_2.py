@@ -4,7 +4,7 @@ import sys
 import logging
 import traceback
 import duckdb
-from pyspark.shell import spark
+import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import trim, lower
 from pyspark.sql.functions import (
@@ -38,11 +38,18 @@ logger = get_logger(__name__, "elt")
 
 
 def _get_spark_session():
-    return (
+    spark = (
         SparkSession.builder.appName("elt_transform")
         .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+        .config("spark.hadoop.dfs.datanode.use.datanode.hostname", "true")
         .getOrCreate()
     )
+
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    hadoop_conf.set("dfs.client.use.datanode.hostname", "true")
+    hadoop_conf.set("dfs.datanode.use.datanode.hostname", "true")
+
+    return spark
 
 
 def _build_dim_date(raw_ohlcs):
@@ -173,17 +180,22 @@ def _build_fact_stock_daily(
 
 def transform_2(spark: SparkSession = None, target_date: str = None):
     should_stop_spark = False
+    raw_ohlcs = None
+
     if spark is None:
         spark = _get_spark_session()
         should_stop_spark = True
 
-    file_pattern = f"ohlcs_{target_date}.parquet" if target_date else "ohlcs_*.parquet"
-    raw_ohlcs = spark.read.parquet(f"{HDFS_OHLCS_DIR}/{file_pattern}")
-    raw_companies = spark.read.parquet(f"{HDFS_DB_DIR}/companies_*.parquet")
-    raw_exchanges = spark.read.parquet(f"{HDFS_DB_DIR}/exchanges_*.parquet")
-    raw_industries = spark.read.parquet(f"{HDFS_DB_DIR}/industries_*.parquet")
-
     try:
+        file_pattern = (
+            f"ohlcs_{target_date}.parquet" if target_date else "ohlcs_*.parquet"
+        )
+
+        raw_ohlcs = spark.read.parquet(f"{HDFS_OHLCS_DIR}/{file_pattern}").cache()
+        raw_companies = spark.read.parquet(f"{HDFS_DB_DIR}/companies_*.parquet")
+        raw_exchanges = spark.read.parquet(f"{HDFS_DB_DIR}/exchanges_*.parquet")
+        raw_industries = spark.read.parquet(f"{HDFS_DB_DIR}/industries_*.parquet")
+
         with duckdb.connect(str(DUCKDB_PATH)) as conn:
             conn.execute("SET schema = 'DataWarehouse'")
 
@@ -221,10 +233,11 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
 
         pd_dim_date = df_dim_date.toPandas()
         pd_fact = df_fact.toPandas()
-        pd_fact = pd_fact.dropna(subset=["company_key", "industry_key", "exchange_key"])
 
         if pd_fact[["company_key", "industry_key", "exchange_key"]].isna().any().any():
             raise ValueError("Found NULL foreign keys in FACT_STOCK_DAILY")
+
+        pd_fact = pd_fact.dropna(subset=["company_key", "industry_key", "exchange_key"])
 
         with duckdb.connect(str(DUCKDB_PATH)) as conn:
             conn.execute("SET schema = 'DataWarehouse'")
@@ -254,10 +267,13 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
         )
 
     except Exception as e:
-        logger.error(f"[Transform] Error during transform_2 processing flow: {e}")
+        logger.error(f"[Transform] Error during transform_2: {e}")
         traceback.print_exc()
+        raise e
 
     finally:
+        if raw_ohlcs is not None:
+            raw_ohlcs.unpersist()
         if should_stop_spark:
             spark.stop()
 

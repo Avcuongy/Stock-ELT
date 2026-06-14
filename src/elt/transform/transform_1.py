@@ -24,11 +24,18 @@ logger = get_logger(__name__, "elt")
 
 
 def _get_spark_session():
-    return (
-        SparkSession.builder.appName("elt_transform_dims")
+    spark = (
+        SparkSession.builder.appName("elt_transform")
         .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+        .config("spark.hadoop.dfs.datanode.use.datanode.hostname", "true")
         .getOrCreate()
     )
+
+    hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+    hadoop_conf.set("dfs.client.use.datanode.hostname", "true")
+    hadoop_conf.set("dfs.datanode.use.datanode.hostname", "true")
+
+    return spark
 
 
 def _build_dim_company(spark: SparkSession):
@@ -106,54 +113,65 @@ def transform_1(spark: SparkSession = None):
     if spark is None:
         spark = _get_spark_session()
         should_stop_spark = True
+    try:
+        df_dim_company = _build_dim_company(spark)
+        df_dim_exchange = _build_dim_exchange(spark)
+        df_dim_industry = _build_dim_industry(spark)
 
-    df_dim_company = _build_dim_company(spark)
-    df_dim_exchange = _build_dim_exchange(spark)
-    df_dim_industry = _build_dim_industry(spark)
+        pd_dim_company = df_dim_company.toPandas()
+        pd_dim_exchange = df_dim_exchange.toPandas()
+        pd_dim_industry = df_dim_industry.toPandas()
 
-    pd_dim_company = df_dim_company.toPandas()
-    pd_dim_exchange = df_dim_exchange.toPandas()
-    pd_dim_industry = df_dim_industry.toPandas()
+        for c in ["region_local_open", "region_local_close"]:
+            pd_dim_exchange[c] = (
+                pd.to_timedelta(pd_dim_exchange[c])
+                .astype(str)
+                .str.extract(r"(\d{2}:\d{2}:\d{2})")[0]
+            )
+            pd_dim_exchange[c] = pd_dim_exchange[c].fillna("00:00:00")
 
-    for c in ["region_local_open", "region_local_close"]:
-        pd_dim_exchange[c] = (
-            pd.to_timedelta(pd_dim_exchange[c])
-            .astype(str)
-            .str.extract(r"(\d{2}:\d{2}:\d{2})")[0]
+        with duckdb.connect(str(DUCKDB_PATH)) as conn:
+            conn.execute("SET schema = 'DataWarehouse'")
+
+            conn.execute("""
+                INSERT INTO DIM_COMPANY (company_ticker, company_name, company_cik, company_is_delisted, company_location, is_current)
+                SELECT company_ticker, company_name, company_cik, company_is_delisted, company_location, TRUE FROM pd_dim_company
+            """)
+
+            conn.execute("""
+                INSERT INTO DIM_EXCHANGE (exchange_name, region_name, region_market_type, region_local_open, region_local_close, is_current)
+                SELECT exchange_name, region_name, region_market_type, region_local_open, region_local_close, TRUE FROM pd_dim_exchange
+            """)
+
+            conn.execute("""
+                INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, company_category, sic_industry, sic_sector, is_current)
+                SELECT industry_sector, industry_name, company_category, sic_industry, sic_sector, TRUE FROM pd_dim_industry
+            """)
+
+            company_count = conn.execute("SELECT COUNT(*) FROM DIM_COMPANY").fetchone()[
+                0
+            ]
+            exchange_count = conn.execute(
+                "SELECT COUNT(*) FROM DIM_EXCHANGE"
+            ).fetchone()[0]
+            industry_count = conn.execute(
+                "SELECT COUNT(*) FROM DIM_INDUSTRY"
+            ).fetchone()[0]
+
+        logger.info(f"[Transform] DIM_COMPANY records : {company_count:,}")
+        logger.info(f"[Transform] DIM_EXCHANGE records: {exchange_count:,}")
+        logger.info(f"[Transform] DIM_INDUSTRY records: {industry_count:,}")
+        logger.info(
+            "[Transform] Successfully transformed dim_company, dim_exchange, and dim_industry and loaded into DuckDB"
         )
-        pd_dim_exchange[c] = pd_dim_exchange[c].fillna("00:00:00")
 
-    with duckdb.connect(str(DUCKDB_PATH)) as conn:
-        conn.execute("SET schema = 'DataWarehouse'")
-
-        conn.execute("""
-            INSERT INTO DIM_COMPANY (company_ticker, company_name, company_cik, company_is_delisted, company_location, is_current)
-            SELECT company_ticker, company_name, company_cik, company_is_delisted, company_location, TRUE FROM pd_dim_company
-        """)
-
-        conn.execute("""
-            INSERT INTO DIM_EXCHANGE (exchange_name, region_name, region_market_type, region_local_open, region_local_close, is_current)
-            SELECT exchange_name, region_name, region_market_type, region_local_open, region_local_close, TRUE FROM pd_dim_exchange
-        """)
-
-        conn.execute("""
-            INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, company_category, sic_industry, sic_sector, is_current)
-            SELECT industry_sector, industry_name, company_category, sic_industry, sic_sector, TRUE FROM pd_dim_industry
-        """)
-
-        company_count = conn.execute("SELECT COUNT(*) FROM DIM_COMPANY").fetchone()[0]
-        exchange_count = conn.execute("SELECT COUNT(*) FROM DIM_EXCHANGE").fetchone()[0]
-        industry_count = conn.execute("SELECT COUNT(*) FROM DIM_INDUSTRY").fetchone()[0]
-
-    logger.info(f"[Transform] DIM_COMPANY records : {company_count:,}")
-    logger.info(f"[Transform] DIM_EXCHANGE records: {exchange_count:,}")
-    logger.info(f"[Transform] DIM_INDUSTRY records: {industry_count:,}")
-    logger.info(
-        "[Transform] Successfully transformed dim_company, dim_exchange, and dim_industry and loaded into DuckDB"
-    )
-
-    if should_stop_spark:
-        spark.stop()
+    except Exception as e:
+        logger.error(f"[Transform] Error during transform_1: {e}")
+        traceback.print_exc()
+        raise e
+    finally:
+        if should_stop_spark:
+            spark.stop()
 
 
 if __name__ == "__main__":

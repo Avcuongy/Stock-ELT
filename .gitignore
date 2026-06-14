@@ -227,6 +227,7 @@ data/
 *.json
 *.parquet
 *.db
+*.duckdb
 
 # Airflow
 airflow/config/

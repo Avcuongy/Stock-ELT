@@ -15,7 +15,7 @@ def main() -> None:
     logger.info("[Config] Config project folders")
     setup_folder()
     config_dw()
-    logger.info("[Config] Config project folders is complete")
+    logger.info("[Config] Config project is complete")
 
 
 if __name__ == "__main__":
