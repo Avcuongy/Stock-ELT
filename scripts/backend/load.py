@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import logging
 from backend.load import load_db_others, load_db_exchanges, load_db_companies
+from utils.logger import get_logger
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -9,15 +10,7 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = PROJECT_ROOT / "logs" / "backend.log"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR, mode="a", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "backend")
 
 
 def main() -> None:
