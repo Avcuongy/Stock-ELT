@@ -248,11 +248,29 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
                 ON CONFLICT (date_key) DO NOTHING
             """)
 
+            target_date_keys = tuple(pd_dim_date["date_key"].unique().tolist())
+            if len(target_date_keys) == 1:
+                conn.execute(
+                    f"DELETE FROM FACT_STOCK_DAILY WHERE date_key = {target_date_keys[0]}"
+                )
+            elif len(target_date_keys) > 1:
+                conn.execute(
+                    f"DELETE FROM FACT_STOCK_DAILY WHERE date_key IN {target_date_keys}"
+                )
+
             conn.execute("""
                 INSERT INTO FACT_STOCK_DAILY 
                 (date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend)
                 SELECT date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend 
                 FROM pd_fact
+            """)
+
+            conn.execute("""
+                DELETE FROM FACT_STOCK_DAILY 
+                WHERE date_key IS NULL 
+                   OR company_key IS NULL 
+                   OR industry_key IS NULL 
+                   OR exchange_key IS NULL
             """)
 
             date_count = conn.execute("SELECT COUNT(*) FROM DIM_DATE").fetchone()[0]
