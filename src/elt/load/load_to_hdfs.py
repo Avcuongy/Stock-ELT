@@ -55,7 +55,7 @@ def _upload_parquet_folders(
 
         for file_path in parquet_files:
             dest_path = f"{hdfs_target}/{file_path.name}"
-            logger.info(f"[Load] Putting {file_path.name} to {dest_path}")
+            logger.info(f"[Load] Successfully putting {file_path.name} to {dest_path}")
 
             client.upload(dest_path, str(file_path), overwrite=True)
 

@@ -1,5 +1,5 @@
 # Phony targets
-.PHONY: help etl backend
+.PHONY: help elt backend
 
 # Python interpreter (venv)
 PYTHON ?= .venv/scripts/python.exe
