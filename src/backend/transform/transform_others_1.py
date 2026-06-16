@@ -3,7 +3,6 @@ import os
 import sys
 import json
 import datetime
-import logging
 import hashlib
 from utils.logger import get_logger
 
@@ -17,6 +16,8 @@ logger = get_logger(__name__, "backend")
 
 
 def _get_latest_file_in_directory(directory, extension):
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
     files = [
         os.path.join(directory, f)
         for f in os.listdir(directory)
@@ -26,6 +27,19 @@ def _get_latest_file_in_directory(directory, extension):
         return None
     latest_file = max(files, key=os.path.getmtime)
     return latest_file
+
+
+def _cleanup_old_files(directory: Path, current_file: Path):
+    if not directory.exists():
+        return
+
+    for f in directory.glob("*.json"):
+        if f.name != current_file.name:
+            try:
+                f.unlink()
+                logger.info(f"[Backend - Transform] Removed old file: {f.name}")
+            except Exception as e:
+                logger.error(f"[Backend - Transform] Error removing {f.name}: {e}")
 
 
 def _generate_id(text):
@@ -58,10 +72,10 @@ def _transform_industries(companies_data):
         sector = item.get("sector", "")
         industry = item.get("industry", "")
 
-        if industry and industry not in industries_dict:
-            key = industry
+        key = f"{sector}_{industry}"
+        if industry and key not in industries_dict:
             industries_dict[key] = {
-                "id": _generate_id(industry),
+                "id": _generate_id(key),
                 "sector": sector,
                 "industry": industry,
             }
@@ -119,26 +133,38 @@ def transform_others():
 
     # SIC Industries
     sic_industries = _transform_sic_industries(companies_data)
+    sicindustries_processed_dir.mkdir(parents=True, exist_ok=True)
     sic_output_file = sicindustries_processed_dir / f"sicindustries_{today}.json"
+
     with open(sic_output_file, "w", encoding="utf-8") as f:
         json.dump(sic_industries, f, indent=2, ensure_ascii=False)
     logger.info(
         f"[Backend - Transform] Transformed {len(sic_industries)} SIC industries."
     )
 
+    _cleanup_old_files(sicindustries_processed_dir, sic_output_file)
+
     # Industries
     industries = _transform_industries(companies_data)
+    industries_processed_dir.mkdir(parents=True, exist_ok=True)
     industries_output_file = industries_processed_dir / f"industries_{today}.json"
+
     with open(industries_output_file, "w", encoding="utf-8") as f:
         json.dump(industries, f, indent=2, ensure_ascii=False)
     logger.info(f"[Backend - Transform] Transformed {len(industries)} industries.")
 
+    _cleanup_old_files(industries_processed_dir, industries_output_file)
+
     # Regions
     regions = _transform_regions(markets_data)
+    regions_processed_dir.mkdir(parents=True, exist_ok=True)
     regions_output_file = regions_processed_dir / f"regions_{today}.json"
+
     with open(regions_output_file, "w", encoding="utf-8") as f:
         json.dump(regions, f, indent=2, ensure_ascii=False)
     logger.info(f"[Backend - Transform] Transformed {len(regions)} regions.")
+
+    _cleanup_old_files(regions_processed_dir, regions_output_file)
 
     return {
         "sic_industries": sic_industries,

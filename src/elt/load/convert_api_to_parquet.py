@@ -7,6 +7,9 @@ import traceback
 import logging
 import pandas as pd
 from utils.logger import get_logger
+import warnings
+
+warnings.filterwarnings("ignore")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
@@ -16,48 +19,49 @@ DATA_COMPLETE_DIR = DATA_DIR / "completed"
 logger = get_logger(__name__, "elt")
 
 
-def _get_latest_file_in_directory(directory, extension):
-    Path(directory).mkdir(parents=True, exist_ok=True)
-
-    files = [
-        os.path.join(directory, f)
-        for f in os.listdir(directory)
-        if f.endswith(extension)
-    ]
-    if not files:
-        return None
-    latest_file = max(files, key=os.path.getmtime)
-    return latest_file
-
-
 def _export_to_parquet():
-    latest_file = _get_latest_file_in_directory(DATA_RAW_DIR / "ohlcs", ".json")
-    if not latest_file:
-        logger.warning("[Load] Warning: No raw OHLC file found.")
-        return None
+    ohlcs_raw_dir = DATA_RAW_DIR / "ohlcs"
+    ohlcs_raw_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(latest_file, "r", encoding="utf-8") as f:
-        ohlc_data = json.load(f)
+    json_files = list(ohlcs_raw_dir.glob("*.json"))
+    if not json_files:
+        logger.warning("[Load] Warning: No raw OHLC files found.")
+        return None
 
     processed_ohlcs = []
-    for record in ohlc_data:
-        processed_record = {
-            "ticker": record.get("ticker", record.get("T")),
-            "open": record.get("open", record.get("o")),
-            "high": record.get("high", record.get("h")),
-            "low": record.get("low", record.get("l")),
-            "close": record.get("close", record.get("c")),
-            "volume": record.get("volume", record.get("v")),
-            "vwap": record.get("vwap", record.get("vw")),
-            "timestamp": record.get("timestamp", record.get("t")),
-            "transactions": record.get("transactions", record.get("n")),
-            "otc": record.get("otc", False),
-        }
-        processed_ohlcs.append(processed_record)
+    for file_path in json_files:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                ohlc_data = json.load(f)
+
+            for record in ohlc_data:
+                processed_record = {
+                    "ticker": record.get("ticker", record.get("T")),
+                    "open": record.get("open", record.get("o")),
+                    "high": record.get("high", record.get("h")),
+                    "low": record.get("low", record.get("l")),
+                    "close": record.get("close", record.get("c")),
+                    "volume": record.get("volume", record.get("v")),
+                    "vwap": record.get("vwap", record.get("vw")),
+                    "timestamp": record.get("timestamp", record.get("t")),
+                    "transactions": record.get("transactions", record.get("n")),
+                    "otc": record.get("otc", False),
+                }
+                processed_ohlcs.append(processed_record)
+        except Exception as e:
+            logger.error(f"[Load] Error reading {file_path.name}: {e}")
+
+    if not processed_ohlcs:
+        logger.warning("[Load] No data extracted from JSON files.")
+        return None
 
     df = pd.DataFrame(processed_ohlcs)
+
+    df = df.drop_duplicates(subset=["ticker", "timestamp"])
+
     if "timestamp" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+
     type_mapping = {
         "ticker": "string",
         "open": "float64",
@@ -81,7 +85,7 @@ def _export_to_parquet():
 
     df.to_parquet(output_file, engine="pyarrow", compression="snappy", index=False)
 
-    logger.info(f"[Load] Converted {len(df)} OHLC records to Parquet at: {output_file}")
+    logger.info(f"[Load] Converted {len(df)} OHLC records | Saved at: {output_file}")
 
     return output_file
 

@@ -1,7 +1,6 @@
 from pathlib import Path
 import os
 import sys
-import logging
 import json
 import datetime
 import hashlib
@@ -17,6 +16,8 @@ logger = get_logger(__name__, "backend")
 
 
 def _get_latest_file_in_directory(directory, extension):
+    Path(directory).mkdir(parents=True, exist_ok=True)
+
     files = [
         os.path.join(directory, f)
         for f in os.listdir(directory)
@@ -28,12 +29,28 @@ def _get_latest_file_in_directory(directory, extension):
     return latest_file
 
 
+def _cleanup_old_files(directory: Path, current_file: Path):
+    if not directory.exists():
+        return
+
+    for f in directory.glob("*.json"):
+        if f.name != current_file.name:
+            try:
+                f.unlink()
+                logger.info(f"[Backend - Transform] Removed old file: {f.name}")
+            except Exception as e:
+                logger.error(f"[Backend - Transform] Error removing {f.name}: {e}")
+
+
 def _generate_id(text):
     return hashlib.md5(text.encode()).hexdigest()
 
 
 def transform_exchanges():
-    latest_file = _get_latest_file_in_directory(DATA_RAW_DIR / "markets", ".json")
+    markets_raw_dir = DATA_RAW_DIR / "markets"
+    exchanges_processed_dir = DATA_PROCESSED_DIR / "exchanges"
+
+    latest_file = _get_latest_file_in_directory(markets_raw_dir, ".json")
     if not latest_file:
         logger.info("[Backend - Transform] No raw markets file found.")
         return
@@ -69,12 +86,16 @@ def transform_exchanges():
 
     exchanges = list(exchanges_dict.values())
     today = datetime.datetime.now().strftime("%Y_%m_%d")
-    output_file = DATA_PROCESSED_DIR / "exchanges" / f"exchanges_{today}.json"
+
+    exchanges_processed_dir.mkdir(parents=True, exist_ok=True)
+    output_file = exchanges_processed_dir / f"exchanges_{today}.json"
 
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(exchanges, f, indent=2, ensure_ascii=False)
 
     logger.info(f"[Backend - Transform] Transformed {len(exchanges)} exchanges.")
+
+    _cleanup_old_files(exchanges_processed_dir, output_file)
 
     return exchanges
 
