@@ -158,9 +158,9 @@ def transform_1(spark: SparkSession = None):
                 "SELECT COUNT(*) FROM DIM_INDUSTRY"
             ).fetchone()[0]
 
-        logger.info(f"[Transform] DIM_COMPANY records : {company_count:,}")
-        logger.info(f"[Transform] DIM_EXCHANGE records: {exchange_count:,}")
-        logger.info(f"[Transform] DIM_INDUSTRY records: {industry_count:,}")
+        logger.info(f"[Transform] DIM_COMPANY records  : {company_count:,}")
+        logger.info(f"[Transform] DIM_EXCHANGE records : {exchange_count:,}")
+        logger.info(f"[Transform] DIM_INDUSTRY records : {industry_count:,}")
         logger.info(
             "[Transform] Successfully transformed dim_company, dim_exchange, and dim_industry and loaded into DuckDB"
         )

@@ -36,5 +36,6 @@ python scripts/elt/transform.py
 
 # Connect to duckdb
 
-- Use Connect string: `Driver={DuckDB Driver};Database=data_warehouse.duckdb;access_mode=read_only;`
+- Dowload ODBC for duckdb.
+- Use Connect string: `Driver={DuckDB Driver};Database=data_warehouse.duckdb;access_mode=read_only;`.
 - You need to replace `data_warehouse.duckdb` by true full path define to your \*.duckdb.
