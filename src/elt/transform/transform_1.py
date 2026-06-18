@@ -44,6 +44,7 @@ def _build_dim_company(spark: SparkSession):
     df_dim_company = raw_companies.select(
         col("company_ticker"),
         col("company_name"),
+        col("company_category"),
         col("company_cik"),
         col("company_is_delisted").cast("boolean"),
         col("company_location"),
@@ -92,7 +93,6 @@ def _build_dim_industry(spark: SparkSession):
         .select(
             col("industry_sector"),
             col("industry_name"),
-            col("company_category"),
             col("sic_industry"),
             col("sic_sector"),
         )
@@ -102,7 +102,7 @@ def _build_dim_industry(spark: SparkSession):
         subset=["industry_sector", "industry_name"]
     )
     df_dim_industry = df_dim_industry.dropDuplicates(
-        subset=["industry_sector", "industry_name", "company_category"]
+        subset=["industry_sector", "industry_name"]
     )
 
     return df_dim_industry
@@ -134,8 +134,8 @@ def transform_1(spark: SparkSession = None):
             conn.execute("SET schema = 'DataWarehouse'")
 
             conn.execute("""
-                INSERT INTO DIM_COMPANY (company_ticker, company_name, company_cik, company_is_delisted, company_location, is_current)
-                SELECT company_ticker, company_name, company_cik, company_is_delisted, company_location, TRUE FROM pd_dim_company
+                INSERT INTO DIM_COMPANY (company_ticker, company_name, company_category, company_cik, company_is_delisted, company_location, is_current)
+                SELECT company_ticker, company_name, company_category, company_cik, company_is_delisted, company_location, TRUE FROM pd_dim_company
             """)
 
             conn.execute("""
@@ -144,8 +144,8 @@ def transform_1(spark: SparkSession = None):
             """)
 
             conn.execute("""
-                INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, company_category, sic_industry, sic_sector, is_current)
-                SELECT industry_sector, industry_name, company_category, sic_industry, sic_sector, TRUE FROM pd_dim_industry
+                INSERT INTO DIM_INDUSTRY (industry_sector, industry_name, sic_industry, sic_sector, is_current)
+                SELECT industry_sector, industry_name, sic_industry, sic_sector, TRUE FROM pd_dim_industry
             """)
 
             company_count = conn.execute("SELECT COUNT(*) FROM DIM_COMPANY").fetchone()[

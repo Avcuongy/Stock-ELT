@@ -28,6 +28,7 @@ CREATE TABLE DIM_COMPANY (
     company_key INTEGER DEFAULT nextval('seq_company_key') PRIMARY KEY,
     company_ticker VARCHAR,
     company_name VARCHAR,
+    company_category VARCHAR,
     company_cik VARCHAR,
     company_is_delisted BOOLEAN,
     company_location VARCHAR,
@@ -39,7 +40,6 @@ CREATE TABLE DIM_INDUSTRY (
     industry_key INTEGER DEFAULT nextval('seq_industry_key') PRIMARY KEY,
     industry_sector VARCHAR,
     industry_name VARCHAR,
-    company_category VARCHAR,
     sic_industry VARCHAR,
     sic_sector VARCHAR,
     is_current BOOLEAN DEFAULT TRUE

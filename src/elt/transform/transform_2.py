@@ -5,12 +5,10 @@ import logging
 import traceback
 import duckdb
 import pandas as pd
-import warnings
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import trim, lower
 from pyspark.sql.functions import (
     col,
-    trim,
-    lower,
     to_date,
     date_format,
     dayofmonth,
@@ -23,6 +21,7 @@ from pyspark.sql.functions import (
     lit,
 )
 from utils.logger import get_logger
+import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -38,24 +37,25 @@ HDFS_OHLCS_DIR = f"{HDFS_RPC_URL}{HDFS_BASE_DIR}/ohlcs"
 logger = get_logger(__name__, "elt")
 
 
-def _get_spark_session() -> SparkSession:
-    """Khởi tạo và cấu hình Spark Session."""
+def _get_spark_session():
     spark = (
-        SparkSession.builder.appName("elt_transform")
+        SparkSession.builder.appName("elt_transform_fact")
         .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
         .config("spark.hadoop.dfs.datanode.use.datanode.hostname", "true")
         .getOrCreate()
     )
+
     hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
     hadoop_conf.set("dfs.client.use.datanode.hostname", "true")
     hadoop_conf.set("dfs.datanode.use.datanode.hostname", "true")
+
     return spark
 
 
 def _build_dim_date(raw_ohlcs):
     dim_date = raw_ohlcs.select(to_date(col("timestamp")).alias("full_date")).distinct()
 
-    return (
+    dim_date = (
         dim_date.withColumn(
             "date_key", date_format(col("full_date"), "yyyyMMdd").cast("int")
         )
@@ -72,16 +72,7 @@ def _build_dim_date(raw_ohlcs):
         .withColumn("is_holiday", lit(False))
     )
 
-
-def _load_dim_date_to_duckdb(pd_dim_date: pd.DataFrame):
-    with duckdb.connect(str(DUCKDB_PATH)) as conn:
-        conn.execute("SET schema = 'DataWarehouse'")
-
-        conn.execute("""
-            INSERT INTO DIM_DATE (date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday)
-            SELECT date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday FROM pd_dim_date
-            ON CONFLICT (date_key) DO NOTHING
-        """)
+    return dim_date
 
 
 def _build_fact_stock_daily(
@@ -110,114 +101,80 @@ def _build_fact_stock_daily(
         trim(lower(col("company_ticker"))).alias("bridge_ticker"),
         col("company_exchange_id").alias("bridge_exchange_id"),
         col("company_industry_id").alias("bridge_industry_id"),
-        "company_category",
+    )
+    fact_joined = fact_df.join(
+        bridge_df, fact_df.ticker == bridge_df.bridge_ticker, "inner"
+    )
+
+    dim_company_db = dim_company_db.withColumn(
+        "company_ticker", trim(lower(col("company_ticker")))
+    )
+    fact_joined = fact_joined.join(
+        dim_company_db, fact_joined.ticker == dim_company_db.company_ticker, "inner"
     )
 
     exchange_bridge = raw_exchanges.select(
         col("exchange_id").alias("bridge_exchange_ref_id"),
         trim(col("exchange_name")).alias("bridge_exchange_name"),
     )
-
-    industry_bridge = raw_industries.select(
-        col("industry_id").alias("bridge_industry_ref_id"),
-        trim(col("industry_name")).alias("bridge_industry_name"),
-    )
-
-    fact_joined = fact_df.join(
-        bridge_df, fact_df.ticker == bridge_df.bridge_ticker, "inner"
-    )
-
-    dim_company_clean = dim_company_db.withColumn(
-        "company_ticker", trim(lower(col("company_ticker")))
-    )
-    fact_joined = fact_joined.join(
-        dim_company_clean,
-        fact_joined.ticker == dim_company_clean.company_ticker,
-        "inner",
-    )
-
     fact_joined = fact_joined.join(
         exchange_bridge,
         fact_joined.bridge_exchange_id == exchange_bridge.bridge_exchange_ref_id,
         "inner",
     )
 
-    dim_exchange_clean = dim_exchange_db.withColumn(
+    dim_exchange_db = dim_exchange_db.withColumn(
         "exchange_name", trim(col("exchange_name"))
     )
     fact_joined = fact_joined.join(
-        dim_exchange_clean,
-        fact_joined.bridge_exchange_name == dim_exchange_clean.exchange_name,
+        dim_exchange_db,
+        fact_joined.bridge_exchange_name == dim_exchange_db.exchange_name,
         "inner",
     )
 
+    industry_bridge = raw_industries.select(
+        col("industry_id").alias("bridge_industry_ref_id"),
+        trim(col("industry_name")).alias("bridge_industry_name"),
+    )
     fact_joined = fact_joined.join(
         industry_bridge,
         fact_joined.bridge_industry_id == industry_bridge.bridge_industry_ref_id,
         "inner",
     )
 
-    dim_industry_clean = dim_industry_db.withColumn(
+    dim_industry_db = dim_industry_db.withColumn(
         "industry_name", trim(col("industry_name"))
     )
+
     fact_joined = fact_joined.join(
-        dim_industry_clean,
-        (fact_joined.bridge_industry_name == dim_industry_clean.industry_name)
-        & (fact_joined.company_category == dim_industry_clean.company_category),
+        dim_industry_db,
+        fact_joined.bridge_industry_name == dim_industry_db.industry_name,
         "inner",
     )
 
-    fact_final = (
-        fact_joined.select(
-            col("date_key"),
-            col("company_key").cast("int"),
-            col("industry_key").cast("int"),
-            col("exchange_key").cast("int"),
-            col("open").alias("open_price"),
-            col("high").alias("high_price"),
-            col("low").alias("low_price"),
-            col("close").alias("close_price"),
-            col("volume").cast("long"),
-            col("price_change"),
-            col("price_trend"),
-        )
-        .filter(
-            col("company_key").isNotNull()
-            & col("industry_key").isNotNull()
-            & col("exchange_key").isNotNull()
-        )
-        .dropDuplicates()
+    fact_final = fact_joined.select(
+        col("date_key"),
+        col("company_key").cast("int"),
+        col("industry_key").cast("int"),
+        col("exchange_key").cast("int"),
+        col("open").alias("open_price"),
+        col("high").alias("high_price"),
+        col("low").alias("low_price"),
+        col("close").alias("close_price"),
+        col("volume").cast("long"),
+        col("price_change"),
+        col("price_trend"),
     )
 
+    fact_final = fact_final.filter(
+        col("company_key").isNotNull()
+        & col("industry_key").isNotNull()
+        & col("exchange_key").isNotNull()
+    )
+
+    fact_final = fact_final.dropDuplicates()
+
     return fact_final
-
-
-def _load_fact_to_duckdb(pd_fact: pd.DataFrame, target_date_keys: list):
-    if len(target_date_keys) == 0:
-        logger.warning(
-            "[Transform] Not found any date_key to delete in FACT_STOCK_DAILY. Skipping deletion step and directly inserting new records."
-        )
-        return
-
-    with duckdb.connect(str(DUCKDB_PATH)) as conn:
-        conn.execute("SET schema = 'DataWarehouse'")
-
-        if len(target_date_keys) == 1:
-            conn.execute(
-                f"DELETE FROM FACT_STOCK_DAILY WHERE date_key = {target_date_keys[0]}"
-            )
-        else:
-            sql_tuple_str = f"({', '.join(map(str, target_date_keys))})"
-            conn.execute(
-                f"DELETE FROM FACT_STOCK_DAILY WHERE date_key IN {sql_tuple_str}"
-            )
-
-        conn.execute("""
-            INSERT INTO FACT_STOCK_DAILY 
-            (date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend)
-            SELECT date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend 
-            FROM pd_fact
-        """)
 
 
 def transform_2(spark: SparkSession = None, target_date: str = None):
@@ -238,11 +195,6 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
         raw_exchanges = spark.read.parquet(f"{HDFS_DB_DIR}/exchanges_*.parquet")
         raw_industries = spark.read.parquet(f"{HDFS_DB_DIR}/industries_*.parquet")
 
-        df_dim_date = _build_dim_date(raw_ohlcs)
-        pd_dim_date = df_dim_date.toPandas()
-
-        _load_dim_date_to_duckdb(pd_dim_date)
-
         with duckdb.connect(str(DUCKDB_PATH)) as conn:
             conn.execute("SET schema = 'DataWarehouse'")
 
@@ -251,17 +203,22 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
                     "SELECT company_key, company_ticker FROM DIM_COMPANY WHERE is_current = TRUE"
                 ).df()
             )
+
             dim_exchange_db = spark.createDataFrame(
                 conn.execute(
                     "SELECT exchange_key, exchange_name FROM DIM_EXCHANGE WHERE is_current = TRUE"
                 ).df()
             )
+
             dim_industry_db = spark.createDataFrame(conn.execute("""
-                    SELECT industry_key, industry_name, company_category 
+                    SELECT 
+                        industry_key, 
+                        industry_name 
                     FROM DIM_INDUSTRY 
                     WHERE is_current = TRUE
-                """).df())
+                    """).df())
 
+        df_dim_date = _build_dim_date(raw_ohlcs)
         df_fact = _build_fact_stock_daily(
             raw_ohlcs,
             raw_companies,
@@ -272,27 +229,57 @@ def transform_2(spark: SparkSession = None, target_date: str = None):
             dim_industry_db,
         )
 
+        pd_dim_date = df_dim_date.toPandas()
         pd_fact = df_fact.toPandas()
 
         if pd_fact[["company_key", "industry_key", "exchange_key"]].isna().any().any():
-            raise ValueError(
-                "[Transform] Found null values in company_key, industry_key, or exchange_key after building fact table. This indicates a join issue between fact and dimension tables. Please investigate the join logic and ensure all keys are properly matched."
-            )
+            raise ValueError("Found NULL foreign keys in FACT_STOCK_DAILY")
 
-        target_date_keys = pd_dim_date["date_key"].unique().tolist()
-        _load_fact_to_duckdb(pd_fact, target_date_keys)
+        pd_fact = pd_fact.dropna(subset=["company_key", "industry_key", "exchange_key"])
 
         with duckdb.connect(str(DUCKDB_PATH)) as conn:
             conn.execute("SET schema = 'DataWarehouse'")
+
+            conn.execute("""
+                INSERT INTO DIM_DATE (date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday)
+                SELECT date_key, full_date, day, month, year, quarter, day_of_week, week_of_year, is_weekend, is_holiday FROM pd_dim_date
+                ON CONFLICT (date_key) DO NOTHING
+            """)
+
+            target_date_keys = tuple(pd_dim_date["date_key"].unique().tolist())
+            if len(target_date_keys) == 1:
+                conn.execute(
+                    f"DELETE FROM FACT_STOCK_DAILY WHERE date_key = {target_date_keys[0]}"
+                )
+            elif len(target_date_keys) > 1:
+                conn.execute(
+                    f"DELETE FROM FACT_STOCK_DAILY WHERE date_key IN {target_date_keys}"
+                )
+
+            conn.execute("""
+                INSERT INTO FACT_STOCK_DAILY 
+                (date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend)
+                SELECT date_key, company_key, industry_key, exchange_key, open_price, high_price, low_price, close_price, volume, price_change, price_trend 
+                FROM pd_fact
+            """)
+
+            conn.execute("""
+                DELETE FROM FACT_STOCK_DAILY 
+                WHERE date_key IS NULL 
+                   OR company_key IS NULL 
+                   OR industry_key IS NULL 
+                   OR exchange_key IS NULL
+            """)
+
             date_count = conn.execute("SELECT COUNT(*) FROM DIM_DATE").fetchone()[0]
             fact_count = conn.execute(
                 "SELECT COUNT(*) FROM FACT_STOCK_DAILY"
             ).fetchone()[0]
 
-        logger.info(f"[Transform] DIM_DATE records         : {date_count:,}")
-        logger.info(f"[Transform] FACT_STOCK_DAILY records : {fact_count:,}")
+        logger.info(f"[Transform] DIM_DATE records : {date_count:,}")
+        logger.info(f"[Transform] FACT_STOCK_DAILY records: {fact_count:,}")
         logger.info(
-            "[Transform] Successfully transformed dim_date and fact_stock_daily and loaded into DuckDB"
+            "[Transform] Successfully transformed dim_date, fact_stock_daily and loaded into DuckDB"
         )
 
     except Exception as e:
