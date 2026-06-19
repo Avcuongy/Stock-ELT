@@ -80,7 +80,9 @@ def transform_companies():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(companies, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"[Backend - Transform] Transformed {len(companies)} companies.")
+    logger.info(
+        f"[Backend - Transform] Transformed {len(companies)} companies at {output_file}"
+    )
 
     _cleanup_old_files(companies_processed_dir, output_file)
 

@@ -139,7 +139,7 @@ def transform_others():
     with open(sic_output_file, "w", encoding="utf-8") as f:
         json.dump(sic_industries, f, indent=2, ensure_ascii=False)
     logger.info(
-        f"[Backend - Transform] Transformed {len(sic_industries)} SIC industries."
+        f"[Backend - Transform] Transformed {len(sic_industries)} SIC industries at {sic_output_file}."
     )
 
     _cleanup_old_files(sicindustries_processed_dir, sic_output_file)
@@ -151,7 +151,9 @@ def transform_others():
 
     with open(industries_output_file, "w", encoding="utf-8") as f:
         json.dump(industries, f, indent=2, ensure_ascii=False)
-    logger.info(f"[Backend - Transform] Transformed {len(industries)} industries.")
+    logger.info(
+        f"[Backend - Transform] Transformed {len(industries)} industries at {industries_output_file}."
+    )
 
     _cleanup_old_files(industries_processed_dir, industries_output_file)
 
@@ -162,7 +164,9 @@ def transform_others():
 
     with open(regions_output_file, "w", encoding="utf-8") as f:
         json.dump(regions, f, indent=2, ensure_ascii=False)
-    logger.info(f"[Backend - Transform] Transformed {len(regions)} regions.")
+    logger.info(
+        f"[Backend - Transform] Transformed {len(regions)} regions at {regions_output_file}"
+    )
 
     _cleanup_old_files(regions_processed_dir, regions_output_file)
 

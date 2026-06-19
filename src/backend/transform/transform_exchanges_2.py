@@ -93,7 +93,9 @@ def transform_exchanges():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(exchanges, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"[Backend - Transform] Transformed {len(exchanges)} exchanges.")
+    logger.info(
+        f"[Backend - Transform] Transformed {len(exchanges)} exchanges at {output_file}"
+    )
 
     _cleanup_old_files(exchanges_processed_dir, output_file)
 

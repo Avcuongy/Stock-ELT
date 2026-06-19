@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
 
-PROJECT_PATH = "/path/to/your/stock-elt"
-PYTHON_EXEC = f"{PROJECT_PATH}/.venv/Scripts/python"
+PROJECT_PATH = "/opt/airflow/project"
+PYTHON_EXEC = "python"
 
 default_args = {
     "owner": "airflow",
@@ -19,7 +19,7 @@ with DAG(
     schedule="0 1 1 * *",
     start_date=datetime(2026, 6, 14),
     catchup=False,
-    tags=["source", "backend"],
+    tags=["source", "backend", "etl"],
 ) as dag:
 
     task_extract = BashOperator(
