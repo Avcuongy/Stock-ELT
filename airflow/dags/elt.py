@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-from airflow.sdk import DAG
+from airflow import DAG
 from airflow.providers.standard.operators.bash import BashOperator
 
-PROJECT_PATH = "/path/to/your/stock-elt"
-PYTHON_EXEC = f"{PROJECT_PATH}/.venv/Scripts/python"
+PROJECT_PATH = "/opt/airflow/project"
+PYTHON_EXEC = "python"
 
 default_args = {
     "owner": "airflow",
@@ -13,7 +13,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="elt",
+    dag_id="elt_pipeline",
     default_args=default_args,
     description="ELT",
     schedule="*/30 * * * *",
@@ -22,19 +22,21 @@ with DAG(
     tags=["warehouse", "elt"],
 ) as dag:
 
+    export_env = f"export PYTHONPATH={PROJECT_PATH}/src:{PROJECT_PATH} && "
+
     task_extract = BashOperator(
         task_id="elt_extract",
-        bash_command=f"cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/extract.py",
+        bash_command=f"{export_env} cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/extract.py",
     )
 
     task_load = BashOperator(
         task_id="elt_load",
-        bash_command=f"cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/load.py",
+        bash_command=f"{export_env} cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/load.py",
     )
 
     task_transform = BashOperator(
         task_id="elt_transform",
-        bash_command=f"cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/transform.py",
+        bash_command=f"{export_env} cd {PROJECT_PATH} && {PYTHON_EXEC} scripts/elt/transform.py",
     )
 
     task_extract >> task_load >> task_transform
