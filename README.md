@@ -15,7 +15,7 @@ A pipeline that automatically collects, stores, and processes stock market data 
 ### Tech stack:
 
 <p align="center">
-  <img src="assets/tool.png" alt="tool" width="800">
+  <img src="assets/tool.png" alt="tool" width="700">
 </p>
 
 ### APIs:
@@ -39,7 +39,7 @@ A pipeline that automatically collects, stores, and processes stock market data 
 **ELT**: Fetches the latest stock price data, re-syncs metadata from MySQL, processes it with Spark, and loads the result into the DuckDB Data Warehouse. Data comes from the source database and [Massive API](https://massive.com/docs/rest/stocks/aggregates/custom-bars).
 
 <p align="center">
-  <img src="assets/schema.png" alt="Star Schema" width="800">
+  <img src="assets/schema.png" alt="Star Schema" width="750">
 </p>
 
 ## Dashboard
