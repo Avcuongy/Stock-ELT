@@ -73,7 +73,7 @@ def _export_to_parquet():
             )
 
             logger.info(
-                f"[Load] Exported table: {table} | Row exported: {len(df):,} | Saved to: {output_file.name}"
+                f"[Load] Exported table: {table:<18} | Row exported: {len(df):<10,} | Saved to: {output_file.name}"
             )
 
             exported_files[table] = str(output_file)
