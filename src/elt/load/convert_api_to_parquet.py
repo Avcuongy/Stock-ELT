@@ -19,14 +19,31 @@ DATA_COMPLETE_DIR = DATA_DIR / "completed"
 logger = get_logger(__name__, "elt")
 
 
+def _get_latest_file_in_directory(directory, extension):
+    if not os.path.exists(directory):
+        return None
+    files = [
+        os.path.join(directory, f)
+        for f in os.listdir(directory)
+        if f.endswith(extension) and not f.startswith(".")
+    ]
+    if not files:
+        return None
+    latest_file = max(files, key=os.path.getmtime)
+    return latest_file
+
+
 def _export_to_parquet():
     ohlcs_raw_dir = DATA_RAW_DIR / "ohlcs"
     ohlcs_raw_dir.mkdir(parents=True, exist_ok=True)
 
-    json_files = list(ohlcs_raw_dir.glob("*.json"))
-    if not json_files:
+    latest_file_path = _get_latest_file_in_directory(str(ohlcs_raw_dir), ".json")
+
+    if not latest_file_path:
         logger.warning("[Load] Warning: No raw OHLC files found.")
         return None
+
+    json_files = [Path(latest_file_path)]
 
     processed_ohlcs = []
     for file_path in json_files:
@@ -92,7 +109,9 @@ def _export_to_parquet():
         allow_truncated_timestamps=True,
     )
 
-    logger.info(f"[Load] Converted {len(df)} OHLC records | Saved at: {output_file}")
+    logger.info(
+        f"[Load] Converted {len(df)} OHLC records from {Path(latest_file_path).name} | Saved at: {output_file}"
+    )
 
     return output_file
 
