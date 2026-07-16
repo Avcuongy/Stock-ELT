@@ -229,12 +229,51 @@ services:
     networks:
       - hadoop_net
 
+  # Pushgateway: Collector metricss
+  pushgateway:
+    image: prom/pushgateway:v1.6.2
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - hadoop_net
+    restart: always
+
+  # Prometheus scrapes metrics from the Pushgateway and stores them in a time-series database.
+  prometheus:
+    image: prom/prometheus:v2.45.1
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - hadoop_net
+    restart: always
+
+  # Grafana visualization
+  grafana:
+    image: grafana/grafana:10.1.5
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - hadoop_net
+    restart: always
+
 volumes:
   namenode_data:
   datanode1_data:
   datanode2_data:
   datanode3_data:
   postgres_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   hadoop_net:
