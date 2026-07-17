@@ -26,6 +26,12 @@ A pipeline that automatically collects, stores, and processes stock market data 
 | [Alpha Vantage](https://www.alphavantage.co/)                              | Exchange and region      | Monthly         |
 | [Massive API](https://massive.com/docs/rest/stocks/aggregates/custom-bars) | Daily OHLC data          | Daily           |
 
+### Flow:
+
+<p align="center">
+  <img src="assets/flow.png" alt="flow" width="750">
+</p>
+
 ---
 
 ## Diagrams
