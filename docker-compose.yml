@@ -229,7 +229,7 @@ services:
     networks:
       - hadoop_net
 
-  # Pushgateway: Collector metricss
+  # Pushgateway: Collector metrics
   pushgateway:
     image: prom/pushgateway:v1.6.2
     container_name: pushgateway
