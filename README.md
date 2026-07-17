@@ -29,7 +29,7 @@ A pipeline that automatically collects, stores, and processes stock market data 
 ### Flow:
 
 <p align="center">
-  <img src="assets/flow.png" alt="flow" width="750">
+  <img src="assets/flow.png" alt="flow" width="800">
 </p>
 
 ---
